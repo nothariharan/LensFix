@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:lens_fix/screens/login_screen.dart';
+import 'package:lens_fix/screens/history_screen.dart'; // Import History Screen
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -42,14 +43,30 @@ class _ProfileScreenState extends State<ProfileScreen> {
           children: [
             const SizedBox(height: 20),
             
-            // AVATAR
+            // AVATAR WITH GLOW
             GestureDetector(
               onTap: _pickImage,
               child: Stack(
                 alignment: Alignment.center,
                 children: [
+                  // The Glow Container
                   Container(
-                    padding: const EdgeInsets.all(5),
+                    width: 130,
+                    height: 130,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.white.withOpacity(0.15), // Subtle white glow
+                          blurRadius: 30,
+                          spreadRadius: 10,
+                        ),
+                      ],
+                    ),
+                  ),
+                  // The Ring & Image
+                  Container(
+                    padding: const EdgeInsets.all(4), // Spacing between ring and image
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       border: Border.all(color: Colors.white, width: 2), // White Ring
@@ -61,6 +78,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       child: _profileImage == null ? const Icon(Icons.person, size: 60, color: Colors.white) : null,
                     ),
                   ),
+                  // The Level Badge
                   Positioned(
                     bottom: 0,
                     child: Container(
@@ -68,8 +86,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       decoration: BoxDecoration(
                         color: Colors.white, // White Badge
                         borderRadius: BorderRadius.circular(20),
+                        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.5), blurRadius: 5)],
                       ),
                       child: const Text("LVL 5", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black)),
+                    ),
+                  ),
+                  // Camera Icon hint
+                  Positioned(
+                    right: 0,
+                    top: 0,
+                    child: Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: const BoxDecoration(
+                        color: Colors.white,
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.edit, size: 14, color: Colors.black),
                     ),
                   ),
                 ],
@@ -78,18 +110,28 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
             const SizedBox(height: 20),
             Text("HARIHARAN", style: GoogleFonts.bebasNeue(fontSize: 36, letterSpacing: 2, color: Colors.white)),
-            Text("Campus Guardian", style: GoogleFonts.outfit(fontSize: 16, color: Colors.grey, letterSpacing: 1)),
+            Text("Campus Guardian", style: GoogleFonts.outfit(fontSize: 16, color: Colors.orangeAccent, letterSpacing: 1, fontWeight: FontWeight.bold)), // Orange Title
 
             const SizedBox(height: 40),
 
-            // STATS
+            // STATS ROW
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
               child: Row(
                 children: [
-                  _buildStatCard("XP EARNED", "1,200", Colors.white),
+                  _buildStatCard(
+                    "XP EARNED", 
+                    "1,200", 
+                    Colors.amberAccent, // Yellow for XP
+                  ),
                   const SizedBox(width: 15),
-                  _buildStatCard("ISSUES FIXED", "12", Colors.white),
+                  _buildStatCard(
+                    "ISSUES FIXED", 
+                    "12", 
+                    Colors.greenAccent, // Green for Issues
+                    // Navigate to History when tapped
+                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const HistoryScreen())),
+                  ),
                 ],
               ),
             ),
@@ -103,6 +145,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
             const SizedBox(height: 50),
 
+            // LOGOUT BUTTON
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 40),
               child: OutlinedButton(
@@ -110,16 +153,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (_) => const LoginScreen()), (route) => false);
                 },
                 style: OutlinedButton.styleFrom(
-                  side: const BorderSide(color: Colors.white24),
+                  side: const BorderSide(color: Colors.redAccent, width: 1.5), // Red Border
                   padding: const EdgeInsets.symmetric(vertical: 15),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  backgroundColor: Colors.redAccent.withOpacity(0.05), // Slight red tint background
                 ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: const [
-                    Icon(Icons.logout, color: Colors.white),
+                    Icon(Icons.logout, color: Colors.redAccent), // Red Icon
                     SizedBox(width: 10),
-                    Text("LOGOUT", style: TextStyle(color: Colors.white, letterSpacing: 1)),
+                    Text("LOGOUT", style: TextStyle(color: Colors.redAccent, letterSpacing: 1, fontWeight: FontWeight.bold)), // Red Text
                   ],
                 ),
               ),
@@ -130,22 +174,33 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _buildStatCard(String label, String value, Color color) {
+  // Updated Helper: Accepts onTap for interactivity
+  Widget _buildStatCard(String label, String value, Color color, {VoidCallback? onTap}) {
     return Expanded(
-      child: Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: const Color(0xFF111111),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: Colors.white12),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(label, style: const TextStyle(color: Colors.grey, fontSize: 12, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 10),
-            Text(value, style: TextStyle(color: color, fontSize: 32, fontWeight: FontWeight.bold, fontFamily: 'Courier')),
-          ],
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: const Color(0xFF111111),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: onTap != null ? color.withOpacity(0.5) : Colors.white12), // Highlight border if clickable
+            boxShadow: onTap != null ? [BoxShadow(color: color.withOpacity(0.1), blurRadius: 10)] : [], // Highlight glow if clickable
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(label, style: const TextStyle(color: Colors.grey, fontSize: 12, fontWeight: FontWeight.bold)),
+                  if (onTap != null) Icon(Icons.arrow_forward_ios, size: 12, color: color), // Arrow hint if clickable
+                ],
+              ),
+              const SizedBox(height: 10),
+              Text(value, style: TextStyle(color: color, fontSize: 32, fontWeight: FontWeight.bold, fontFamily: 'Courier')),
+            ],
+          ),
         ),
       ),
     );

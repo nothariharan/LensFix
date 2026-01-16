@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lens_fix/screens/login_screen.dart';
-
+import 'package:lens_fix/screens/landing_screen.dart';
 void main() {
   // 1. We call the class "LensFixApp" here
   runApp(const LensFixApp());
@@ -58,7 +58,7 @@ class LensFixApp extends StatelessWidget {
         ),
       ),
       
-      home: const LoginScreen(),
+      home: const LandingScreen(),
     );
   }
 }

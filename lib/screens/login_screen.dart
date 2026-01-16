@@ -31,19 +31,29 @@ class _LoginScreenState extends State<LoginScreen> {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
+                    // --- UPDATED LOGO SECTION ---
                     ZoomIn(
                       duration: const Duration(milliseconds: 800),
                       child: Container(
-                        height: 120, width: 120,
+                        height: 140, width: 140, // Slightly larger
+                        padding: const EdgeInsets.all(10), // Padding inside the circle
                         decoration: BoxDecoration(
                           color: Colors.transparent,
                           shape: BoxShape.circle,
-                          border: Border.all(color: Colors.white, width: 3), // White Border
+                          border: Border.all(color: Colors.white, width: 2), // Thin White Border
+                          boxShadow: [
+                             BoxShadow(color: Colors.white.withOpacity(0.1), blurRadius: 20)
+                          ]
                         ),
-                        child: const Icon(Icons.camera_alt, size: 60, color: Colors.white),
+                        child: Image.asset(
+                          'assets/logo.png', // <--- YOUR NEW LOGO
+                          color: Colors.white, // Ensure it matches the theme
+                          fit: BoxFit.contain,
+                        ),
                       ),
                     ),
                     const SizedBox(height: 30),
+                    
                     FadeInUp(
                       child: Text("LENSFIX", style: Theme.of(context).textTheme.displayLarge?.copyWith(color: Colors.white, fontWeight: FontWeight.bold, fontFamily: 'Courier')),
                     ),
