@@ -28,15 +28,17 @@ environment:
 # the latest version available on pub.dev. To see which dependencies have newer
 # versions available, run `flutter pub outdated`.
 dependencies:
+  google_fonts: ^6.1.0    # For distinctive typography
+  animate_do: ^3.3.2      # For staggered "wow" animations
   flutter:
     sdk: flutter
 
   # --- LensFix Tech Stack ---
   # 1. The Brain (Gemini AI)
-  google_generative_ai: ^0.4.0
+  google_generative_ai: ^0.4.7
 
   # 2. The Eyes (Camera)
-  image_picker: ^1.0.7
+  image_picker: ^1.2.1
 
   # 3. The Map (OpenStreetMap - Free)
   flutter_map: ^6.0.0
