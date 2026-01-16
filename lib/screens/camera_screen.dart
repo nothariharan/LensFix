@@ -141,9 +141,12 @@ class _CameraScreenState extends State<CameraScreen> {
                       Expanded(
                         flex: 2,
                         child: ElevatedButton.icon(
-                          onPressed: _analysisResult.isEmpty 
-                              ? _analyzeImage 
-                              : () { Navigator.pop(context); }, // Submit Action
+                                              onPressed: _analysisResult.isEmpty 
+                        ? _analyzeImage 
+                        : () { 
+                            // Send the result back to Home Screen
+                            Navigator.pop(context, _analysisResult); 
+                          },
                           style: ElevatedButton.styleFrom(
                             backgroundColor: _analysisResult.isEmpty ? const Color(0xFF00F0FF) : Colors.greenAccent,
                             foregroundColor: Colors.black,
