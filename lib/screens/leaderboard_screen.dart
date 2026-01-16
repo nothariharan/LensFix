@@ -58,14 +58,48 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
 
                 const SizedBox(height: 10),
 
-                // PODIUM (Greyscale / Monochrome)
+                // PODIUM (Colored & Glowing)
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    _buildPodiumItem(2, "Camelia", "6,500", Colors.grey[800]!, 140, Colors.grey[400]!),
-                    _buildPodiumItem(1, "HARI", "7,120", Colors.white, 180, Colors.white, isWinner: true, textColor: Colors.black),
-                    _buildPodiumItem(3, "Wilson", "4,800", Colors.grey[900]!, 110, Colors.grey[600]!),
+                    // Rank 2 (Silver)
+                    _buildPodiumItem(
+                      rank: 2, 
+                      name: "Camelia", 
+                      score: "6,500", 
+                      color: Colors.grey[800]!, 
+                      height: 140, 
+                      avatarColor: Colors.grey[400]!,
+                      rankColor: const Color(0xFFC0C0C0), // Silver
+                      scoreColor: Colors.greenAccent,
+                    ),
+                    
+                    // Rank 1 (Gold/Winner)
+                    _buildPodiumItem(
+                      rank: 1, 
+                      name: "HARI", 
+                      score: "7,120", 
+                      color: Colors.white, 
+                      height: 180, 
+                      avatarColor: Colors.white, 
+                      isWinner: true, 
+                      textColor: Colors.black,
+                      rankColor: const Color(0xFFFFD700), // Gold
+                      scoreColor: Colors.green[800]!, // Darker Green for contrast on white
+                    ),
+                    
+                    // Rank 3 (Bronze)
+                    _buildPodiumItem(
+                      rank: 3, 
+                      name: "Wilson", 
+                      score: "4,800", 
+                      color: Colors.grey[900]!, 
+                      height: 110, 
+                      avatarColor: Colors.grey[600]!,
+                      rankColor: const Color(0xFFCD7F32), // Bronze
+                      scoreColor: Colors.greenAccent,
+                    ),
                   ],
                 ),
               ],
@@ -111,10 +145,22 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
     );
   }
 
-  Widget _buildPodiumItem(int rank, String name, String score, Color color, double height, Color avatarColor, {bool isWinner = false, Color textColor = Colors.white}) {
+  Widget _buildPodiumItem({
+    required int rank, 
+    required String name, 
+    required String score, 
+    required Color color, 
+    required double height, 
+    required Color avatarColor, 
+    bool isWinner = false, 
+    Color textColor = Colors.white,
+    required Color rankColor, // Color for the big number
+    required Color scoreColor, // Color for the points
+  }) {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
+        // Avatar + Crown
         Stack(
           alignment: Alignment.topRight,
           clipBehavior: Clip.none,
@@ -131,27 +177,49 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
             if (isWinner)
               const Positioned(
                 top: -15, right: -5,
-                child: Icon(Icons.workspace_premium, color: Colors.white, size: 30), // White Crown
+                child: Icon(Icons.workspace_premium, color: Color(0xFFFFD700), size: 30), // Gold Crown
               ),
           ],
         ),
+        
         const SizedBox(height: 15),
+        
+        // The Podium Bar
         Container(
-          width: 90, height: height,
+          width: 90, 
+          height: height,
           decoration: BoxDecoration(
             color: color,
             borderRadius: const BorderRadius.vertical(top: Radius.circular(15)),
-            border: Border.all(color: Colors.white24),
+            border: Border.all(color: isWinner ? const Color(0xFFFFD700) : Colors.white24, width: isWinner ? 2 : 1), // Gold border for winner
+            boxShadow: isWinner 
+              ? [BoxShadow(color: const Color(0xFFFFD700).withOpacity(0.4), blurRadius: 25, spreadRadius: 1)] // Yellow Glow
+              : [],
           ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(rank.toString(), style: GoogleFonts.bebasNeue(fontSize: 48, color: textColor.withOpacity(0.5))),
-              const SizedBox(height: 4),
-              Text(name, style: TextStyle(color: textColor, fontWeight: FontWeight.bold, fontSize: 14)),
-              const SizedBox(height: 2),
-              Text(score, style: TextStyle(color: textColor.withOpacity(0.7), fontSize: 10, fontWeight: FontWeight.bold)),
-            ],
+          child: FittedBox( // <--- FIXES THE PIXEL OVERFLOW
+            fit: BoxFit.scaleDown,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8.0),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    rank.toString(), 
+                    style: GoogleFonts.bebasNeue(fontSize: 48, color: rankColor) // Colored Rank
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    name, 
+                    style: TextStyle(color: textColor, fontWeight: FontWeight.bold, fontSize: 14)
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    score, 
+                    style: TextStyle(color: scoreColor, fontSize: 12, fontWeight: FontWeight.bold) // Colored Score
+                  ),
+                ],
+              ),
+            ),
           ),
         ),
       ],
@@ -171,7 +239,10 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
         children: [
           Container(
             width: 30, alignment: Alignment.center,
-            child: Text(rank.toString().padLeft(2, '0'), style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.grey)),
+            child: Text(
+              rank.toString().padLeft(2, '0'), 
+              style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white54)
+            ),
           ),
           const SizedBox(width: 15),
           CircleAvatar(
