@@ -8,18 +8,39 @@ class DatabaseService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
+  // --- ADMIN & SYSTEM HELPERS ---
+
+  // 1. Get Live Stream of All Issues (For Admin Dashboard)
+  Stream<QuerySnapshot> getIssuesStream() {
+    return _db.collection('issues').orderBy('timestamp', descending: true).snapshots();
+  }
+
+  // 2. Delete an Issue (Admin Power)
+  Future<void> deleteIssue(String docId) async {
+    await _db.collection('issues').doc(docId).delete();
+  }
+
+  // --- HELPER ACTIONS ---
+
+  // 3. Resolve Issue (For Helpers)
   Future<void> resolveIssue(String docId) async {
     String userId = _auth.currentUser!.uid;
+    
+    // Mark Issue as Resolved
     await _db.collection('issues').doc(docId).update({
       'status': 'Resolved',
       'resolvedBy': userId,
       'resolvedAt': FieldValue.serverTimestamp(),
     });
+
+    // Reward Helper (+100 XP for fixing stuff!)
     await _db.collection('users').doc(userId).update({
       'xp': FieldValue.increment(100),
       'reports': FieldValue.increment(1), 
     });
   }
+
+  // --- UTILITIES ---
 
   Future<String> convertImageToBase64(File imageFile) async {
     try {
@@ -30,12 +51,17 @@ class DatabaseService {
     }
   }
 
+  // --- USER MANAGEMENT ---
+
   Future<void> ensureUserExists(String role) async {
     User? user = _auth.currentUser;
     if (user == null) return;
+
     DocumentReference userDoc = _db.collection('users').doc(user.uid);
     DocumentSnapshot snapshot = await userDoc.get();
+
     if (!snapshot.exists) {
+      // NEW USER
       await userDoc.set({
         'email': user.email,
         'role': role.toLowerCase(), 
@@ -45,7 +71,10 @@ class DatabaseService {
         'lastActive': FieldValue.serverTimestamp(),
       });
     } else {
-      await userDoc.update({'lastActive': FieldValue.serverTimestamp()});
+      // EXISTING USER
+      await userDoc.update({
+        'lastActive': FieldValue.serverTimestamp(),
+      });
     }
   }
 
@@ -56,6 +85,8 @@ class DatabaseService {
     if (imageBase64 != null) data['profileImageBase64'] = imageBase64;
     await _db.collection('users').doc(userId).set(data, SetOptions(merge: true));
   }
+
+  // --- REPORTING LOGIC ---
 
   Future<void> reportIssue({
     required Map<String, dynamic> aiData, 
@@ -83,6 +114,7 @@ class DatabaseService {
         'upvotes': 0,
       });
 
+      // Update User XP
       await _db.collection('users').doc(userId).set({
         'email': userEmail,
         'xp': FieldValue.increment(50),      

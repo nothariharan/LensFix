@@ -1,11 +1,13 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:animate_do/animate_do.dart'; 
 import 'package:lens_fix/screens/home_screen.dart';
 import 'package:lens_fix/services/auth_service.dart';
-import 'package:lens_fix/services/database_service.dart'; // Import Database Service
+import 'package:lens_fix/services/database_service.dart'; 
 import 'package:lens_fix/screens/helper_home_screen.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:lens_fix/screens/admin_dashboard_screen.dart'; // <--- NEW IMPORT
+
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 
@@ -17,7 +19,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _authService = AuthService();
-  final _dbService = DatabaseService(); // Initialize DB Service
+  final _dbService = DatabaseService(); 
   
   bool _isLoading = false;
   
@@ -47,7 +49,6 @@ class _LoginScreenState extends State<LoginScreen> {
 
       if (!mounted) return;
       
-      // 3. Navigate (We will add role-based routing later, for now go to Home)
       // 3. Check Role & Route
       User? user = FirebaseAuth.instance.currentUser;
       DocumentSnapshot userDoc = await FirebaseFirestore.instance.collection('users').doc(user!.uid).get();
@@ -57,6 +58,8 @@ class _LoginScreenState extends State<LoginScreen> {
 
       if (role.toLowerCase() == 'helper') {
         Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const HelperHomeScreen())); // Go to Staff App
+      } else if (role.toLowerCase() == 'admin') {
+        Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const AdminDashboardScreen())); // Go to Admin App <--- NEW LOGIC
       } else {
         Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const HomeScreen())); // Go to Student App
       }
@@ -139,7 +142,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                 const Text("Welcome Back", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 24)),
                                 const SizedBox(height: 20),
                                 
-                                // ROLE DROPDOWN (NEW)
+                                // ROLE DROPDOWN
                                 Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 12),
                                   decoration: BoxDecoration(
