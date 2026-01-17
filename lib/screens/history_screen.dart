@@ -1,3 +1,5 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -6,6 +8,8 @@ class HistoryScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final String? uid = FirebaseAuth.instance.currentUser?.uid;
+
     return Scaffold(
       backgroundColor: Colors.black, // NOIR THEME
       appBar: AppBar(
@@ -17,34 +21,93 @@ class HistoryScreen extends StatelessWidget {
           onPressed: () => Navigator.pop(context),
         ),
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(20),
-        children: [
-          _buildSectionTitle("COMPLETED"),
-          _buildHistoryCard(
-            "Broken Street Light", "Main Gate Entrance", "Fixed 2 hrs ago",
-            Icons.check_circle, Colors.greenAccent, // Keep status color
-          ),
-          _buildHistoryCard(
-            "Water Leakage", "Hostel H4 - 2nd Floor", "Fixed yesterday",
-            Icons.check_circle, Colors.greenAccent,
-          ),
+      body: uid == null 
+          ? const Center(child: Text("Please Login", style: TextStyle(color: Colors.white)))
+          : StreamBuilder<QuerySnapshot>(
+              stream: FirebaseFirestore.instance
+                  .collection('issues')
+                  .where('reportedBy', isEqualTo: uid) // Dynamic User Filter
+                  .orderBy('timestamp', descending: true)
+                  .snapshots(),
+              builder: (context, snapshot) {
+                
+                // 1. Loading State
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator(color: Colors.white));
+                }
 
-          const SizedBox(height: 30),
+                // 2. Empty State
+                if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                  return Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.history, size: 50, color: Colors.grey[800]),
+                        const SizedBox(height: 15),
+                        const Text("No reports yet.", style: TextStyle(color: Colors.grey)),
+                      ],
+                    ),
+                  );
+                }
 
-          _buildSectionTitle("IN PROGRESS"),
-          _buildHistoryCard(
-            "Large Pothole", "Library Road", "Reported 10 mins ago",
-            Icons.pending, Colors.orangeAccent,
-          ),
-          _buildHistoryCard(
-            "Overflowing Dustbin", "Cafeteria", "Reported 30 mins ago",
-            Icons.pending, Colors.orangeAccent,
-          ),
-        ],
-      ),
+                // 3. Separate Data into Sections
+                var docs = snapshot.data!.docs;
+                var completed = docs.where((doc) => doc['status'] == 'Resolved').toList();
+                var inProgress = docs.where((doc) => doc['status'] != 'Resolved').toList();
+
+                return ListView(
+                  padding: const EdgeInsets.all(20),
+                  children: [
+                    // COMPLETED SECTION
+                    if (completed.isNotEmpty) ...[
+                      _buildSectionTitle("COMPLETED"),
+                      ...completed.map((doc) {
+                        var data = doc.data() as Map<String, dynamic>;
+                        return _buildHistoryCard(
+                          data['title'] ?? "Issue",
+                          data['category'] ?? "General", // Using Category as sub-text
+                          _formatTimestamp(data['timestamp']),
+                          Icons.check_circle,
+                          Colors.greenAccent,
+                        );
+                      }),
+                      const SizedBox(height: 30),
+                    ],
+
+                    // IN PROGRESS SECTION
+                    if (inProgress.isNotEmpty) ...[
+                      _buildSectionTitle("IN PROGRESS"),
+                      ...inProgress.map((doc) {
+                        var data = doc.data() as Map<String, dynamic>;
+                        return _buildHistoryCard(
+                          data['title'] ?? "Issue",
+                          data['category'] ?? "General",
+                          _formatTimestamp(data['timestamp']),
+                          Icons.pending,
+                          Colors.orangeAccent,
+                        );
+                      }),
+                    ],
+                  ],
+                );
+              },
+            ),
     );
   }
+
+  // --- HELPER: Simple Relative Time Formatter ---
+  String _formatTimestamp(Timestamp? timestamp) {
+    if (timestamp == null) return "Just now";
+    final now = DateTime.now();
+    final date = timestamp.toDate();
+    final diff = now.difference(date);
+
+    if (diff.inMinutes < 60) return "${diff.inMinutes} mins ago";
+    if (diff.inHours < 24) return "${diff.inHours} hrs ago";
+    return "${diff.inDays} days ago";
+  }
+
+  // --- YOUR ORIGINAL UI WIDGETS (UNCHANGED) ---
 
   Widget _buildSectionTitle(String title) {
     return Padding(

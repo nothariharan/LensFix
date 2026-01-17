@@ -1,5 +1,5 @@
+import 'dart:async'; // Required for Timer
 import 'dart:convert'; 
-import 'dart:math'; 
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart'; 
 import 'package:latlong2/latlong.dart';      
@@ -9,6 +9,7 @@ import 'package:lens_fix/screens/leaderboard_screen.dart';
 import 'package:lens_fix/screens/profile_screen.dart';
 import 'package:lens_fix/screens/history_screen.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:animate_do/animate_do.dart'; // Ensure animate_do is imported
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -19,28 +20,45 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   
+  // NOTIFICATION STATE
+  bool _showXpNotification = false;
+
   Future<void> _openCamera() async {
-    await Navigator.push(
+    // Wait for the Camera Screen to return a result
+    final result = await Navigator.push(
       context, 
       MaterialPageRoute(builder: (_) => const CameraScreen())
     );
+
+    // If result is TRUE, it means a report was submitted
+    if (result == true) {
+      _triggerXpNotification();
+    }
   }
 
-  // --- UPDATED: ICON SELECTOR ---
+  void _triggerXpNotification() {
+    setState(() => _showXpNotification = true);
+    
+    // Hide it after 4 seconds
+    Timer(const Duration(seconds: 4), () {
+      if (mounted) setState(() => _showXpNotification = false);
+    });
+  }
+
+  // --- MARKER HELPERS (Keep your existing code) ---
   IconData _getCategoryIcon(String category) {
     switch (category.trim()) {
       case 'Electrical': return Icons.electrical_services;
       case 'Plumbing': return Icons.plumbing;
-      case 'Furniture': return Icons.chair; // or Icons.weekend
+      case 'Furniture': return Icons.chair;
       case 'IT': return Icons.computer;
-      case 'Structural': return Icons.foundation; // or Icons.house
+      case 'Structural': return Icons.foundation; 
       case 'Cleaning': return Icons.cleaning_services;
       case 'Security': return Icons.security;
-      default: return Icons.report_problem; // 'Other' or fallback
+      default: return Icons.report_problem; 
     }
   }
 
-  // --- UPDATED: MARKER BUILDER ---
   Widget _buildPinStatic(String severity, String category) {
     Color color = Colors.greenAccent; 
     if (severity.toLowerCase() == 'medium') color = Colors.orangeAccent;
@@ -53,11 +71,7 @@ class _HomeScreenState extends State<HomeScreen> {
         border: Border.all(color: Colors.white, width: 2),
         boxShadow: const [BoxShadow(color: Colors.black45, blurRadius: 4)],
       ),
-      child: Icon(
-        _getCategoryIcon(category), // Dynamic Icon
-        color: Colors.black, 
-        size: 20
-      ),
+      child: Icon(_getCategoryIcon(category), color: Colors.black, size: 20),
     );
   }
 
@@ -92,11 +106,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(20),
                     child: data['imageBase64'] != null
-                        ? Image.memory(
-                            base64Decode(data['imageBase64']), 
-                            fit: BoxFit.cover,
-                            gaplessPlayback: true,
-                          )
+                        ? Image.memory(base64Decode(data['imageBase64']), fit: BoxFit.cover, gaplessPlayback: true)
                         : const Center(child: Icon(Icons.image_not_supported, color: Colors.grey)),
                   ),
                 ),
@@ -107,21 +117,13 @@ class _HomeScreenState extends State<HomeScreen> {
                 children: [
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                    decoration: BoxDecoration(
-                      border: Border.all(color: Colors.white24),
-                      borderRadius: BorderRadius.circular(10)
-                    ),
+                    decoration: BoxDecoration(border: Border.all(color: Colors.white24), borderRadius: BorderRadius.circular(10)),
                     child: Text("SEVERITY: ${data['severity']}", style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
                   ),
                   const SizedBox(width: 10),
-                  // SHOW CATEGORY BADGE
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                    decoration: BoxDecoration(
-                      border: Border.all(color: Colors.white24),
-                      borderRadius: BorderRadius.circular(10),
-                      color: Colors.white10
-                    ),
+                    decoration: BoxDecoration(border: Border.all(color: Colors.white24), borderRadius: BorderRadius.circular(10), color: Colors.white10),
                     child: Text(data['category'] ?? "Other", style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
                   ),
                 ],
@@ -142,6 +144,7 @@ class _HomeScreenState extends State<HomeScreen> {
       extendBodyBehindAppBar: true,
       body: Stack(
         children: [
+          // LAYER 1: MAP
           StreamBuilder<QuerySnapshot>(
             stream: FirebaseFirestore.instance.collection('issues').snapshots(),
             builder: (context, snapshot) {
@@ -155,11 +158,9 @@ class _HomeScreenState extends State<HomeScreen> {
                   markers.add(
                     Marker(
                       point: LatLng(geo.latitude, geo.longitude),
-                      width: 50, 
-                      height: 50,
+                      width: 50, height: 50,
                       child: GestureDetector(
                         onTap: () => _showIssueDetails(context, data),
-                        // Pass Category AND Severity
                         child: _buildPinStatic(data['severity'] ?? 'Low', data['category'] ?? 'Other'),
                       ),
                     ),
@@ -174,16 +175,14 @@ class _HomeScreenState extends State<HomeScreen> {
                   interactionOptions: const InteractionOptions(flags: InteractiveFlag.all),
                 ),
                 children: [
-                  TileLayer(
-                    urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                    userAgentPackageName: 'com.example.lens_fix',
-                  ),
+                  TileLayer(urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', userAgentPackageName: 'com.example.lens_fix'),
                   MarkerLayer(markers: markers),
                 ],
               );
             },
           ),
 
+          // LAYER 2: PROFILE ICON (EXISTING)
           Positioned(
             top: 50, right: 20,
             child: Container(
@@ -195,13 +194,40 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
               child: IconButton(
                 icon: const Icon(Icons.person, color: Colors.white),
-                onPressed: () {
-                  Navigator.push(context, MaterialPageRoute(builder: (_) => const ProfileScreen()));
-                },
+                onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ProfileScreen())),
               ),
             ),
           ),
 
+          // LAYER 2.5: XP NOTIFICATION (NEW FEATURE)
+          // Located exactly to the LEFT of the Profile Icon
+          if (_showXpNotification)
+            Positioned(
+              top: 58, 
+              right: 80, // 20 (padding) + 50 (icon width) + 10 (gap)
+              child: FadeInRight( // Slide in from the right (from profile)
+                duration: const Duration(milliseconds: 500),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.9),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: Colors.yellowAccent, width: 1.5),
+                    boxShadow: [BoxShadow(color: Colors.yellowAccent.withOpacity(0.3), blurRadius: 10)],
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: const [
+                      Icon(Icons.bolt, color: Colors.yellowAccent, size: 16),
+                      SizedBox(width: 5),
+                      Text("+50 XP", style: TextStyle(color: Colors.yellowAccent, fontWeight: FontWeight.bold, fontSize: 14)),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+
+          // LAYER 3: DOCK (EXISTING)
           Align(
             alignment: Alignment.bottomCenter,
             child: Container(
@@ -228,9 +254,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         color: Colors.white, 
                         shape: BoxShape.circle,
                         border: Border.all(color: Colors.grey[300]!, width: 1),
-                        boxShadow: [
-                          BoxShadow(color: Colors.white.withOpacity(0.2), blurRadius: 20, spreadRadius: 2)
-                        ],
+                        boxShadow: [BoxShadow(color: Colors.white.withOpacity(0.2), blurRadius: 20, spreadRadius: 2)],
                       ),
                       child: IconButton(
                         icon: const Icon(Icons.camera_alt, color: Colors.black, size: 32), 

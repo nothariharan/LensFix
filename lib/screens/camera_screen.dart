@@ -128,7 +128,7 @@ class _CameraScreenState extends State<CameraScreen> {
       
       Position position = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
 
-      // --- CHANGED LOGIC START ---
+      // --- ENCODING & UPLOAD ---
       _statusMessage = "ENCODING DATA..."; setState(() {});
       // Convert to String instead of Uploading
       String imageBase64 = await _dbService.convertImageToBase64(_selectedImage!);
@@ -139,11 +139,10 @@ class _CameraScreenState extends State<CameraScreen> {
         imageBase64: imageBase64, // Send the string
         position: position
       );
-      // --- CHANGED LOGIC END ---
 
       if (!mounted) return;
+      // FIX: Simply return 'true' so HomeScreen knows to show the notification
       Navigator.pop(context, true); 
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Report Submitted Successfully!"), backgroundColor: Colors.green));
 
     } catch (e) {
       setState(() => _isLoading = false);
