@@ -8,7 +8,9 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:geolocator/geolocator.dart';
 
 class CameraScreen extends StatefulWidget {
-  const CameraScreen({super.key});
+  // 1. Accept Escalation Flag
+  final bool isEscalation; 
+  const CameraScreen({super.key, this.isEscalation = false});
 
   @override
   State<CameraScreen> createState() => _CameraScreenState();
@@ -32,7 +34,6 @@ class _CameraScreenState extends State<CameraScreen> {
   }
 
   Future<void> _pickImage() async {
-    // FIX: imageQuality: 30 is REQUIRED for the Base64 workaround to work
     final XFile? photo = await _picker.pickImage(
       source: ImageSource.camera,
       imageQuality: 30, 
@@ -128,20 +129,18 @@ class _CameraScreenState extends State<CameraScreen> {
       
       Position position = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
 
-      // --- ENCODING & UPLOAD ---
       _statusMessage = "ENCODING DATA..."; setState(() {});
-      // Convert to String instead of Uploading
       String imageBase64 = await _dbService.convertImageToBase64(_selectedImage!);
 
       _statusMessage = "FINALIZING REPORT..."; setState(() {});
       await _dbService.reportIssue(
         aiData: _analysisData!, 
-        imageBase64: imageBase64, // Send the string
-        position: position
+        imageBase64: imageBase64, 
+        position: position,
+        isEscalation: widget.isEscalation, // 2. Pass Flag to DB
       );
 
       if (!mounted) return;
-      // FIX: Simply return 'true' so HomeScreen knows to show the notification
       Navigator.pop(context, true); 
 
     } catch (e) {
@@ -165,7 +164,8 @@ class _CameraScreenState extends State<CameraScreen> {
       backgroundColor: Colors.black, 
       appBar: AppBar(
         backgroundColor: Colors.transparent,
-        title: Text("ISSUE SCANNER", style: GoogleFonts.bebasNeue(letterSpacing: 2, fontSize: 24, color: Colors.white)),
+        // 3. Change Title based on mode
+        title: Text(widget.isEscalation ? "ESCALATION MODE" : "ISSUE SCANNER", style: GoogleFonts.bebasNeue(letterSpacing: 2, fontSize: 24, color: widget.isEscalation ? Colors.orangeAccent : Colors.white)),
         centerTitle: true,
         leading: IconButton(icon: const Icon(Icons.close, color: Colors.white), onPressed: () => Navigator.pop(context)),
       ),
@@ -177,7 +177,7 @@ class _CameraScreenState extends State<CameraScreen> {
               width: double.infinity,
               margin: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                border: Border.all(color: Colors.white, width: 1), 
+                border: Border.all(color: widget.isEscalation ? Colors.orangeAccent : Colors.white, width: 1), 
                 borderRadius: BorderRadius.circular(20),
                 image: _selectedImage != null ? DecorationImage(image: FileImage(_selectedImage!), fit: BoxFit.cover) : null,
               ),
@@ -207,7 +207,7 @@ class _CameraScreenState extends State<CameraScreen> {
                       Expanded(
                         child: FadeInUp(
                           child: SingleChildScrollView(
-                            physics: const ClampingScrollPhysics(), // Scroll Fix
+                            physics: const ClampingScrollPhysics(), 
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
@@ -281,9 +281,9 @@ class _CameraScreenState extends State<CameraScreen> {
                             flex: 2,
                             child: ElevatedButton.icon(
                               onPressed: _analysisData == null ? _analyzeImage : _submitReport,
-                              style: ElevatedButton.styleFrom(backgroundColor: Colors.white, foregroundColor: Colors.black, padding: const EdgeInsets.symmetric(vertical: 16), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                              style: ElevatedButton.styleFrom(backgroundColor: widget.isEscalation ? Colors.orangeAccent : Colors.white, foregroundColor: Colors.black, padding: const EdgeInsets.symmetric(vertical: 16), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
                               icon: Icon(_analysisData == null ? Icons.analytics : Icons.cloud_upload, color: Colors.black),
-                              label: Text(_analysisData == null ? "ANALYZE ISSUE" : "SUBMIT REPORT", style: const TextStyle(fontWeight: FontWeight.bold)),
+                              label: Text(_analysisData == null ? "ANALYZE ISSUE" : (widget.isEscalation ? "ESCALATE REPORT" : "SUBMIT REPORT"), style: const TextStyle(fontWeight: FontWeight.bold)),
                             ),
                           ),
                         ],

@@ -39,18 +39,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
         content: TextField(
           controller: nameCtrl,
           style: const TextStyle(color: Colors.white),
-          decoration: const InputDecoration(
-            hintText: "Enter your name",
-            hintStyle: TextStyle(color: Colors.grey),
-            enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white24))
-          ),
+          decoration: const InputDecoration(hintText: "Enter name", hintStyle: TextStyle(color: Colors.grey), enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white24))),
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel", style: TextStyle(color: Colors.grey))),
           TextButton(
             onPressed: () async {
               if (nameCtrl.text.isNotEmpty) {
-                // Save name exactly as typed (case sensitive)
                 await _dbService.updateUserProfile(name: nameCtrl.text.trim());
                 if(mounted) Navigator.pop(context);
               }
@@ -69,13 +64,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, color: Colors.white),
-          onPressed: () => Navigator.pop(context),
-        ),
-        actions: [
-          IconButton(icon: const Icon(Icons.settings, color: Colors.white54), onPressed: () {})
-        ],
+        leading: IconButton(icon: const Icon(Icons.arrow_back_ios, color: Colors.white), onPressed: () => Navigator.pop(context)),
+        actions: [IconButton(icon: const Icon(Icons.settings, color: Colors.white54), onPressed: () {})],
       ),
       
       body: uid == null 
@@ -91,7 +81,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 String email = data?['email'] ?? "Student";
                 String displayName = data?['displayName'] ?? email.split('@')[0]; 
                 String? dbImage = data?['profileImageBase64'];
+                String role = data?['role'] ?? 'student'; // Get Role
+                
                 int level = (xp / 500).floor() + 1;
+                bool isHelper = role.toLowerCase() == 'helper';
 
                 return SingleChildScrollView(
                   child: Column(
@@ -104,19 +97,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         child: Stack(
                           alignment: Alignment.center,
                           children: [
-                            Container(
-                              width: 130, height: 130,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                boxShadow: [BoxShadow(color: Colors.white.withOpacity(0.15), blurRadius: 30, spreadRadius: 10)],
-                              ),
-                            ),
+                            Container(width: 130, height: 130, decoration: BoxDecoration(shape: BoxShape.circle, boxShadow: [BoxShadow(color: Colors.white.withOpacity(0.15), blurRadius: 30, spreadRadius: 10)])),
                             Container(
                               padding: const EdgeInsets.all(4), 
                               decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 2)),
                               child: CircleAvatar(
-                                radius: 60,
-                                backgroundColor: const Color(0xFF111111),
+                                radius: 60, backgroundColor: const Color(0xFF111111),
                                 backgroundImage: dbImage != null ? MemoryImage(base64Decode(dbImage)) : null,
                                 child: dbImage == null ? const Icon(Icons.person, size: 60, color: Colors.white) : null,
                               ),
@@ -125,21 +111,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               bottom: 0,
                               child: Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                                decoration: BoxDecoration(
-                                  color: Colors.white,
-                                  borderRadius: BorderRadius.circular(20),
-                                  boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.5), blurRadius: 5)],
-                                ),
+                                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.5), blurRadius: 5)]),
                                 child: Text("LVL $level", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black)),
                               ),
                             ),
                             Positioned(
                               right: 0, top: 0,
-                              child: Container(
-                                padding: const EdgeInsets.all(6),
-                                decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
-                                child: const Icon(Icons.edit, size: 14, color: Colors.black),
-                              ),
+                              child: Container(padding: const EdgeInsets.all(6), decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle), child: const Icon(Icons.edit, size: 14, color: Colors.black)),
                             ),
                           ],
                         ),
@@ -147,13 +125,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
                       const SizedBox(height: 20),
                       
-                      // EDITABLE NAME
                       GestureDetector(
                         onTap: () => _editName(displayName),
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            // FIXED: Changed font to Outfit to support lowercase letters
                             Text(displayName, style: GoogleFonts.outfit(fontSize: 32, fontWeight: FontWeight.w700, color: Colors.white)),
                             const SizedBox(width: 8),
                             const Icon(Icons.edit, color: Colors.white24, size: 20),
@@ -161,7 +137,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ),
                       ),
                       
-                      Text("Campus Guardian", style: GoogleFonts.outfit(fontSize: 16, color: Colors.orangeAccent, letterSpacing: 1, fontWeight: FontWeight.bold)), 
+                      Text(isHelper ? "Maintenance Staff" : "Campus Guardian", style: GoogleFonts.outfit(fontSize: 16, color: Colors.orangeAccent, letterSpacing: 1, fontWeight: FontWeight.bold)), 
 
                       const SizedBox(height: 40),
 
@@ -173,16 +149,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             _buildStatCard("XP EARNED", "$xp", Colors.amberAccent),
                             const SizedBox(width: 15),
                             
+                            // DYNAMIC COUNT (Reported vs Resolved)
                             FutureBuilder<AggregateQuerySnapshot>(
                               future: FirebaseFirestore.instance
                                   .collection('issues')
-                                  .where('reportedBy', isEqualTo: uid)
+                                  .where(isHelper ? 'resolvedBy' : 'reportedBy', isEqualTo: uid) // Logic Switch
                                   .count()
                                   .get(),
                               builder: (context, countSnap) {
                                 String count = countSnap.hasData ? "${countSnap.data!.count}" : "-";
                                 return _buildStatCard(
-                                  "ISSUES REPORTED", 
+                                  isHelper ? "REPORTS FIXED" : "ISSUES REPORTED", // Label Switch
                                   count, 
                                   Colors.greenAccent, 
                                   onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const HistoryScreen())),
@@ -195,6 +172,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       
                       const SizedBox(height: 15),
                       
+                      // RANK
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 20),
                         child: FutureBuilder<AggregateQuerySnapshot>(
@@ -205,11 +183,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               .get(),
                           builder: (context, rankSnap) {
                             String rankDisplay = "#--";
+                            
                             if (rankSnap.hasData && rankSnap.data != null) {
+                              // FIX: Use '?? 0' to handle if count is null
                               int count = rankSnap.data?.count ?? 0;
                               int myRank = count + 1; 
                               rankDisplay = "#$myRank";
                             }
+                            
                             return _buildWideStatCard("CURRENT RANK", rankDisplay, Colors.white);
                           }
                         ),
@@ -226,20 +207,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             if (!mounted) return;
                             Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (_) => const LoginScreen()), (route) => false);
                           },
-                          style: OutlinedButton.styleFrom(
-                            side: const BorderSide(color: Colors.redAccent, width: 1.5), 
-                            padding: const EdgeInsets.symmetric(vertical: 15),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                            backgroundColor: Colors.redAccent.withOpacity(0.05),
-                          ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: const [
-                              Icon(Icons.logout, color: Colors.redAccent),
-                              SizedBox(width: 10),
-                              Text("LOGOUT", style: TextStyle(color: Colors.redAccent, letterSpacing: 1, fontWeight: FontWeight.bold)),
-                            ],
-                          ),
+                          style: OutlinedButton.styleFrom(side: const BorderSide(color: Colors.redAccent, width: 1.5), padding: const EdgeInsets.symmetric(vertical: 15), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), backgroundColor: Colors.redAccent.withOpacity(0.05)),
+                          child: Row(mainAxisAlignment: MainAxisAlignment.center, children: const [Icon(Icons.logout, color: Colors.redAccent), SizedBox(width: 10), Text("LOGOUT", style: TextStyle(color: Colors.redAccent, letterSpacing: 1, fontWeight: FontWeight.bold))]),
                         ),
                       ),
                     ],
@@ -256,26 +225,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
         onTap: onTap,
         child: Container(
           padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: const Color(0xFF111111),
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: onTap != null ? color.withOpacity(0.5) : Colors.white12),
-            boxShadow: onTap != null ? [BoxShadow(color: color.withOpacity(0.1), blurRadius: 10)] : [], 
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(label, style: const TextStyle(color: Colors.grey, fontSize: 10, fontWeight: FontWeight.bold)),
-                  if (onTap != null) Icon(Icons.arrow_forward_ios, size: 12, color: color), 
-                ],
-              ),
-              const SizedBox(height: 10),
-              Text(value, style: TextStyle(color: color, fontSize: 32, fontWeight: FontWeight.bold, fontFamily: 'Courier')),
-            ],
-          ),
+          decoration: BoxDecoration(color: const Color(0xFF111111), borderRadius: BorderRadius.circular(20), border: Border.all(color: onTap != null ? color.withOpacity(0.5) : Colors.white12), boxShadow: onTap != null ? [BoxShadow(color: color.withOpacity(0.1), blurRadius: 10)] : []),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text(label, style: const TextStyle(color: Colors.grey, fontSize: 10, fontWeight: FontWeight.bold)), if (onTap != null) Icon(Icons.arrow_forward_ios, size: 12, color: color)]),
+            const SizedBox(height: 10),
+            Text(value, style: TextStyle(color: color, fontSize: 32, fontWeight: FontWeight.bold, fontFamily: 'Courier')),
+          ]),
         ),
       ),
     );
@@ -283,20 +238,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Widget _buildWideStatCard(String label, String value, Color color) {
     return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: const Color(0xFF111111),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white12),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(label, style: const TextStyle(color: Colors.grey, fontSize: 12, fontWeight: FontWeight.bold)),
-          Text(value, style: TextStyle(color: color, fontSize: 32, fontWeight: FontWeight.bold)),
-        ],
-      ),
+      width: double.infinity, padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(color: const Color(0xFF111111), borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.white12)),
+      child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text(label, style: const TextStyle(color: Colors.grey, fontSize: 12, fontWeight: FontWeight.bold)), Text(value, style: TextStyle(color: color, fontSize: 32, fontWeight: FontWeight.bold))]),
     );
   }
 }

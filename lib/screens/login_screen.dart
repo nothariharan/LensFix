@@ -4,7 +4,8 @@ import 'package:animate_do/animate_do.dart';
 import 'package:lens_fix/screens/home_screen.dart';
 import 'package:lens_fix/services/auth_service.dart';
 import 'package:lens_fix/services/database_service.dart'; // Import Database Service
-
+import 'package:lens_fix/screens/helper_home_screen.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 
@@ -47,7 +48,18 @@ class _LoginScreenState extends State<LoginScreen> {
       if (!mounted) return;
       
       // 3. Navigate (We will add role-based routing later, for now go to Home)
-      Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const HomeScreen()));
+      // 3. Check Role & Route
+      User? user = FirebaseAuth.instance.currentUser;
+      DocumentSnapshot userDoc = await FirebaseFirestore.instance.collection('users').doc(user!.uid).get();
+      String role = (userDoc.data() as Map<String, dynamic>)['role'] ?? 'student';
+
+      if (!mounted) return;
+
+      if (role.toLowerCase() == 'helper') {
+        Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const HelperHomeScreen())); // Go to Staff App
+      } else {
+        Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const HomeScreen())); // Go to Student App
+      }
 
     } on FirebaseAuthException catch (e) {
       String message = "Authentication Failed";
