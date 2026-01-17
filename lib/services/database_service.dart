@@ -1,4 +1,4 @@
-import 'dart:convert'; // Import this for Base64
+import 'dart:convert'; 
 import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -8,7 +8,6 @@ class DatabaseService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
-  // 1. CONVERT IMAGE TO STRING (No Storage Bucket needed)
   Future<String> convertImageToBase64(File imageFile) async {
     try {
       List<int> imageBytes = await imageFile.readAsBytes();
@@ -19,10 +18,9 @@ class DatabaseService {
     }
   }
 
-  // 2. SAVE ISSUE (Stores the image string directly in the DB)
   Future<void> reportIssue({
     required Map<String, dynamic> aiData, 
-    required String imageBase64, // Changed from imageUrl to imageBase64
+    required String imageBase64, 
     required Position position,
   }) async {
     try {
@@ -33,8 +31,9 @@ class DatabaseService {
         'title': aiData['title'] ?? 'Report',
         'description': aiData['description'] ?? 'No description',
         'severity': aiData['severity'] ?? 'Low',
+        'category': aiData['category'] ?? 'Other', // <--- NEW FIELD
         'fix': aiData['fix'] ?? 'None',
-        'imageBase64': imageBase64, // Saving the actual image data here
+        'imageBase64': imageBase64, 
         'location': GeoPoint(position.latitude, position.longitude),
         'status': 'Pending',
         'reportedBy': userId,

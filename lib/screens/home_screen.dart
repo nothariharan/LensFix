@@ -1,11 +1,14 @@
+import 'dart:convert'; 
 import 'dart:math'; 
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart'; 
 import 'package:latlong2/latlong.dart';      
+import 'package:cloud_firestore/cloud_firestore.dart'; 
 import 'package:lens_fix/screens/camera_screen.dart';
 import 'package:lens_fix/screens/leaderboard_screen.dart';
 import 'package:lens_fix/screens/profile_screen.dart';
 import 'package:lens_fix/screens/history_screen.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -15,53 +18,34 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  final List<Marker> _markers = [
-    Marker(
-      point: const LatLng(13.5562, 80.0265),
-      width: 50, height: 50,
-      child: _buildPinStatic(Colors.redAccent, Icons.electrical_services),
-    ),
-    Marker(
-      point: const LatLng(13.5555, 80.0255),
-      width: 40, height: 40,
-      child: _buildPinStatic(Colors.greenAccent, Icons.check),
-    ),
-  ];
-
+  
   Future<void> _openCamera() async {
-    final result = await Navigator.push(
+    await Navigator.push(
       context, 
       MaterialPageRoute(builder: (_) => const CameraScreen())
     );
-    if (result != null && result is Map) {
-       _addNewIssueMarker();
+  }
+
+  // --- UPDATED: ICON SELECTOR ---
+  IconData _getCategoryIcon(String category) {
+    switch (category.trim()) {
+      case 'Electrical': return Icons.electrical_services;
+      case 'Plumbing': return Icons.plumbing;
+      case 'Furniture': return Icons.chair; // or Icons.weekend
+      case 'IT': return Icons.computer;
+      case 'Structural': return Icons.foundation; // or Icons.house
+      case 'Cleaning': return Icons.cleaning_services;
+      case 'Security': return Icons.security;
+      default: return Icons.report_problem; // 'Other' or fallback
     }
   }
 
-  void _addNewIssueMarker() {
-    setState(() {
-      final random = Random();
-      final double latOffset = (random.nextDouble() - 0.5) * 0.001;
-      final double lngOffset = (random.nextDouble() - 0.5) * 0.001;
-      _markers.add(
-        Marker(
-          point: LatLng(13.5560 + latOffset, 80.0260 + lngOffset),
-          width: 60, height: 60,
-          child: _buildPinStatic(Colors.orangeAccent, Icons.warning_amber_rounded),
-        ),
-      );
-    });
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Row(children: const [Icon(Icons.check_circle, color: Colors.black), SizedBox(width: 10), Text("Issue Reported! (+50 XP)", style: TextStyle(color: Colors.black))]),
-        backgroundColor: Colors.white, // NOIR THEME: White SnackBar
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-      ),
-    );
-  }
+  // --- UPDATED: MARKER BUILDER ---
+  Widget _buildPinStatic(String severity, String category) {
+    Color color = Colors.greenAccent; 
+    if (severity.toLowerCase() == 'medium') color = Colors.orangeAccent;
+    if (severity.toLowerCase() == 'high') color = Colors.redAccent;
 
-  static Widget _buildPinStatic(Color color, IconData icon) {
     return Container(
       decoration: BoxDecoration(
         color: color,
@@ -69,7 +53,86 @@ class _HomeScreenState extends State<HomeScreen> {
         border: Border.all(color: Colors.white, width: 2),
         boxShadow: const [BoxShadow(color: Colors.black45, blurRadius: 4)],
       ),
-      child: Icon(icon, color: Colors.black, size: 20),
+      child: Icon(
+        _getCategoryIcon(category), // Dynamic Icon
+        color: Colors.black, 
+        size: 20
+      ),
+    );
+  }
+
+  void _showIssueDetails(BuildContext context, Map<String, dynamic> data) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return Container(
+          height: 550, 
+          padding: const EdgeInsets.all(25),
+          decoration: const BoxDecoration(
+            color: Color(0xFF111111), 
+            borderRadius: BorderRadius.vertical(top: Radius.circular(40)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey[800], borderRadius: BorderRadius.circular(2)))),
+              const SizedBox(height: 20),
+              
+              Text(data['title'] ?? "Unknown Issue", style: GoogleFonts.bebasNeue(fontSize: 28, color: Colors.white)),
+              const SizedBox(height: 10),
+              
+              Expanded(
+                child: Container(
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: Colors.white24),
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(20),
+                    child: data['imageBase64'] != null
+                        ? Image.memory(
+                            base64Decode(data['imageBase64']), 
+                            fit: BoxFit.cover,
+                            gaplessPlayback: true,
+                          )
+                        : const Center(child: Icon(Icons.image_not_supported, color: Colors.grey)),
+                  ),
+                ),
+              ),
+              
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: Colors.white24),
+                      borderRadius: BorderRadius.circular(10)
+                    ),
+                    child: Text("SEVERITY: ${data['severity']}", style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                  ),
+                  const SizedBox(width: 10),
+                  // SHOW CATEGORY BADGE
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: Colors.white24),
+                      borderRadius: BorderRadius.circular(10),
+                      color: Colors.white10
+                    ),
+                    child: Text(data['category'] ?? "Other", style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Text(data['description'] ?? "No description provided.", style: const TextStyle(color: Colors.white70)),
+              const SizedBox(height: 20),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -79,23 +142,48 @@ class _HomeScreenState extends State<HomeScreen> {
       extendBodyBehindAppBar: true,
       body: Stack(
         children: [
-          // LAYER 1: MAP
-          FlutterMap(
-            options: MapOptions(
-              initialCenter: const LatLng(13.5560, 80.0260), 
-              initialZoom: 16.5,
-              interactionOptions: const InteractionOptions(flags: InteractiveFlag.all),
-            ),
-            children: [
-              TileLayer(
-                urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', // Consider finding a dark mode map tile server for full effect
-                userAgentPackageName: 'com.example.lens_fix',
-              ),
-              MarkerLayer(markers: _markers),
-            ],
+          StreamBuilder<QuerySnapshot>(
+            stream: FirebaseFirestore.instance.collection('issues').snapshots(),
+            builder: (context, snapshot) {
+              List<Marker> markers = [];
+              if (snapshot.hasData) {
+                for (var doc in snapshot.data!.docs) {
+                  var data = doc.data() as Map<String, dynamic>;
+                  GeoPoint? geo = data['location'];
+                  if (geo == null) continue;
+
+                  markers.add(
+                    Marker(
+                      point: LatLng(geo.latitude, geo.longitude),
+                      width: 50, 
+                      height: 50,
+                      child: GestureDetector(
+                        onTap: () => _showIssueDetails(context, data),
+                        // Pass Category AND Severity
+                        child: _buildPinStatic(data['severity'] ?? 'Low', data['category'] ?? 'Other'),
+                      ),
+                    ),
+                  );
+                }
+              }
+
+              return FlutterMap(
+                options: MapOptions(
+                  initialCenter: const LatLng(13.5560, 80.0260), 
+                  initialZoom: 16.5,
+                  interactionOptions: const InteractionOptions(flags: InteractiveFlag.all),
+                ),
+                children: [
+                  TileLayer(
+                    urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                    userAgentPackageName: 'com.example.lens_fix',
+                  ),
+                  MarkerLayer(markers: markers),
+                ],
+              );
+            },
           ),
 
-          // LAYER 2: PROFILE ICON
           Positioned(
             top: 50, right: 20,
             child: Container(
@@ -114,7 +202,6 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
 
-          // LAYER 3: DOCK
           Align(
             alignment: Alignment.bottomCenter,
             child: Container(
@@ -122,7 +209,7 @@ class _HomeScreenState extends State<HomeScreen> {
               margin: const EdgeInsets.only(bottom: 30, left: 20, right: 20),
               padding: const EdgeInsets.symmetric(horizontal: 20),
               decoration: BoxDecoration(
-                color: Colors.black.withOpacity(0.9), // Pure Black Dock
+                color: Colors.black.withOpacity(0.9),
                 borderRadius: BorderRadius.circular(25),
                 border: Border.all(color: Colors.white24),
               ),
@@ -133,13 +220,12 @@ class _HomeScreenState extends State<HomeScreen> {
                     Navigator.push(context, MaterialPageRoute(builder: (_) => const HistoryScreen()));
                   },),
                   
-                  // CAMERA BUTTON (The White Pearl)
                   Transform.translate(
                     offset: const Offset(0, -20),
                     child: Container(
                       height: 70, width: 70,
                       decoration: BoxDecoration(
-                        color: Colors.white, // NOIR THEME: White Circle
+                        color: Colors.white, 
                         shape: BoxShape.circle,
                         border: Border.all(color: Colors.grey[300]!, width: 1),
                         boxShadow: [
@@ -147,7 +233,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         ],
                       ),
                       child: IconButton(
-                        icon: const Icon(Icons.camera_alt, color: Colors.black, size: 32), // Black Icon
+                        icon: const Icon(Icons.camera_alt, color: Colors.black, size: 32), 
                         onPressed: _openCamera,
                       ),
                     ),

@@ -7,7 +7,7 @@ class GeminiService {
   static Future<Map<String, dynamic>> analyzeIssue(String imagePath) async {
     try {
       final model = GenerativeModel(
-        model: 'gemini-flash-latest', // Ensure you use a valid model name
+        model: 'gemini-flash-latest', 
         apiKey: ApiConstants.geminiApiKey,
       );
 
@@ -21,14 +21,15 @@ class GeminiService {
       final content = [
         Content.multi([
           TextPart(
-            "You are an AI maintenance assistant. Analyze this image. "
-            "Identify the maintenance or technical issue (e.g., Pothole, Broken Light, Garbage, Graffiti,Wifi Problem). "
-            "If the image is unclear or has no issue, return 'No Issue' in the title. "
-            "IMPORTANT: Return the response strictly as a RAW JSON object (no markdown, no code blocks) with the following keys: "
+            "You are an AI maintenance assistant for a college. Analyze this image. "
+            "1. Identify the issue. "
+            "2. Classify it into exactly ONE of these categories: ['Electrical', 'Plumbing', 'Furniture', 'IT', 'Structural', 'Cleaning', 'Security', 'Other']. "
+            "IMPORTANT: Return the response strictly as a RAW JSON object with these keys: "
             "1. 'title' (Short 2-4 word summary) "
             "2. 'severity' (Low, Medium, or High) "
-            "3. 'description' (A clear 1-sentence explanation) "
-            "4. 'fix' (Recommended technical solution, 1 sentence)"
+            "3. 'category' (Must be one of the categories listed above) "
+            "4. 'description' (A clear 1-sentence explanation) "
+            "5. 'fix' (Recommended solution to that problem with regard to the category considering this is a college too so not extraordinary fixes, 1 sentence)"
           ),
           DataPart('image/jpeg', imageBytes),
         ])
@@ -39,7 +40,6 @@ class GeminiService {
 
       if (responseText == null) return {'error': "AI returned no text."};
 
-      // Clean the response in case Gemini adds markdown code blocks (```json ... ```)
       String cleanJson = responseText.replaceAll('```json', '').replaceAll('```', '').trim();
 
       return jsonDecode(cleanJson);
@@ -49,6 +49,7 @@ class GeminiService {
       return {
         'title': 'Error',
         'severity': 'Unknown',
+        'category': 'Other', // Fallback
         'description': 'Could not analyze image due to a connection error.',
         'fix': 'Please try again.',
         'error': e.toString()
