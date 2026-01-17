@@ -54,21 +54,50 @@ class DatabaseService {
     }
   }
 
+  // --- UPDATED: ADOPT PRE-AUTHORIZED DATA & SYNC UID ---
   Future<void> ensureUserExists(String role) async {
     User? user = _auth.currentUser;
     if (user == null) return;
+
     DocumentReference userDoc = _db.collection('users').doc(user.uid);
     DocumentSnapshot snapshot = await userDoc.get();
+
     if (!snapshot.exists) {
-      await userDoc.set({
-        'email': user.email,
-        'role': role.toLowerCase(), 
-        'displayName': user.email!.split('@')[0], 
-        'xp': 0,
-        'createdAt': FieldValue.serverTimestamp(),
-        'lastActive': FieldValue.serverTimestamp(),
-      });
+      // 1. Search if a pre-authorized document exists for this email
+      final query = await _db
+          .collection('users')
+          .where('email', isEqualTo: user.email)
+          .get();
+
+      if (query.docs.isNotEmpty) {
+        // 2. FOUND: This is the random-ID doc created by Admin
+        var preAuthDoc = query.docs.first;
+        var data = preAuthDoc.data();
+
+        // 3. MIGRATION: Create the new doc with the proper UID
+        await userDoc.set({
+          ...data,
+          'lastActive': FieldValue.serverTimestamp(),
+          // Ensure role matches what Admin intended
+        });
+
+        // 4. CLEANUP: Delete the old random-ID document to prevent duplication
+        if (preAuthDoc.id != user.uid) {
+          await _db.collection('users').doc(preAuthDoc.id).delete();
+        }
+      } else {
+        // 5. NO PRE-AUTH: Create a standard new user (Fallback)
+        await userDoc.set({
+          'email': user.email,
+          'role': role.toLowerCase(),
+          'displayName': user.email!.split('@')[0],
+          'xp': 0,
+          'createdAt': FieldValue.serverTimestamp(),
+          'lastActive': FieldValue.serverTimestamp(),
+        });
+      }
     } else {
+      // EXISTING USER: Just update heartbeat
       await userDoc.update({'lastActive': FieldValue.serverTimestamp()});
     }
   }

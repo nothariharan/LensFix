@@ -244,11 +244,17 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
 
           // LAYER 3: DOCK
+         // LAYER 3: DOCK
           Align(
             alignment: Alignment.bottomCenter,
             child: Container(
               height: 80,
-              margin: const EdgeInsets.only(bottom: 30, left: 20, right: 20),
+              // FIX: Add system padding so it sits ABOVE the Android nav bar
+              margin: EdgeInsets.only(
+                bottom: MediaQuery.of(context).viewPadding.bottom + 20, 
+                left: 20, 
+                right: 20
+              ),
               padding: const EdgeInsets.symmetric(horizontal: 20),
               decoration: BoxDecoration(
                 color: Colors.black.withOpacity(0.9),
@@ -256,6 +262,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 border: Border.all(color: Colors.white24),
               ),
               child: Row(
+                // ... content remains same ...
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   IconButton(icon: const Icon(Icons.history, color: Colors.white70, size: 28), onPressed: () {
