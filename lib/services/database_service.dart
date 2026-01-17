@@ -28,14 +28,19 @@ class DatabaseService {
 
   Future<void> resolveIssue(String docId) async {
     String userId = _auth.currentUser!.uid;
+    
+    // 1. Update the issue status
     await _db.collection('issues').doc(docId).update({
       'status': 'Resolved',
       'resolvedBy': userId,
       'resolvedAt': FieldValue.serverTimestamp(),
     });
+
+    // 2. Update the Helper's persistent stats
     await _db.collection('users').doc(userId).update({
       'xp': FieldValue.increment(100),
       'reports': FieldValue.increment(1), 
+      'fixedCount': FieldValue.increment(1), // NEW: Persistent counter
     });
   }
 
@@ -99,10 +104,15 @@ class DatabaseService {
 
   // --- REPORTING ---
 
+  // --- UPDATED REPORTING WITH BUILDING & FLOOR ---
+
+  // --- DATABASE SERVICE UPDATE ---
   Future<void> reportIssue({
     required Map<String, dynamic> aiData, 
     required String imageBase64, 
     required Position position,
+    required String building, 
+    required String floor,    
     bool isEscalation = false, 
   }) async {
     try {
@@ -117,9 +127,11 @@ class DatabaseService {
         'fix': aiData['fix'] ?? 'None',
         'imageBase64': imageBase64, 
         'location': GeoPoint(position.latitude, position.longitude),
+        'building': building, 
+        'floor': floor,       
         'status': 'Pending',
         'isEscalation': isEscalation,
-        'isUrgent': false,
+        'isUrgent': false, 
         'reportedBy': userId,
         'reporterEmail': userEmail,
         'timestamp': FieldValue.serverTimestamp(),
@@ -127,9 +139,11 @@ class DatabaseService {
         'upvotedBy': [],
       });
 
+      // --- FIXED LOGIC: Increments 'reports' for students ---
       await _db.collection('users').doc(userId).set({
         'email': userEmail,
         'xp': FieldValue.increment(50),      
+        'reports': FieldValue.increment(1), // <--- ADD THIS LINE
         'lastActive': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
 

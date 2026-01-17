@@ -1,18 +1,18 @@
-import 'dart:async'; 
-import 'dart:convert'; 
+import 'dart:async';
+import 'dart:convert';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_map/flutter_map.dart'; 
+import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';      
-import 'package:cloud_firestore/cloud_firestore.dart'; 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:lens_fix/screens/camera_screen.dart';
 import 'package:lens_fix/screens/leaderboard_screen.dart';
 import 'package:lens_fix/screens/profile_screen.dart';
 import 'package:lens_fix/screens/history_screen.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:animate_do/animate_do.dart'; 
+import 'package:animate_do/animate_do.dart';
 import 'package:lens_fix/services/database_service.dart';
-import 'package:geolocator/geolocator.dart'; 
+import 'package:geolocator/geolocator.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -25,7 +25,7 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _showXpNotification = false;
   final String? uid = FirebaseAuth.instance.currentUser?.uid;
 
-  // --- TOP SNACKBAR HELPER ---
+  // --- TOP SNACKBAR HELPER (FIXED OVERLAP) ---
   void _showTopSnackBar(String message, Color color) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -33,7 +33,7 @@ class _HomeScreenState extends State<HomeScreen> {
         backgroundColor: color,
         behavior: SnackBarBehavior.floating,
         margin: EdgeInsets.only(
-          bottom: MediaQuery.of(context).size.height - 100, // Positions it at the top
+          bottom: MediaQuery.of(context).size.height - 120, // Pushes it below system icons
           left: 20,
           right: 20,
         ),
@@ -50,21 +50,13 @@ class _HomeScreenState extends State<HomeScreen> {
         _showTopSnackBar("Issue verified and upvoted!", Colors.greenAccent);
       }
     } catch (e) {
-      if (mounted) {
-        _showTopSnackBar(e.toString().replaceAll("Exception: ", ""), Colors.redAccent);
-      }
+      if (mounted) _showTopSnackBar(e.toString().replaceAll("Exception: ", ""), Colors.redAccent);
     }
   }
 
   Future<void> _openCamera() async {
-    final result = await Navigator.push(
-      context, 
-      MaterialPageRoute(builder: (_) => const CameraScreen())
-    );
-
-    if (result == true) {
-      _triggerXpNotification();
-    }
+    final result = await Navigator.push(context, MaterialPageRoute(builder: (_) => const CameraScreen()));
+    if (result == true) _triggerXpNotification();
   }
 
   void _triggerXpNotification() {
@@ -80,25 +72,19 @@ class _HomeScreenState extends State<HomeScreen> {
       case 'Plumbing': return Icons.plumbing;
       case 'Furniture': return Icons.chair;
       case 'IT': return Icons.computer;
-      case 'Structural': return Icons.foundation; 
+      case 'Structural': return Icons.foundation;
       case 'Cleaning': return Icons.cleaning_services;
       case 'Security': return Icons.security;
-      default: return Icons.report_problem; 
+      default: return Icons.report_problem;
     }
   }
 
   Widget _buildPinStatic(String severity, String category) {
-    Color color = Colors.greenAccent; 
+    Color color = Colors.greenAccent;
     if (severity.toLowerCase() == 'medium') color = Colors.orangeAccent;
     if (severity.toLowerCase() == 'high') color = Colors.redAccent;
-
     return Container(
-      decoration: BoxDecoration(
-        color: color,
-        shape: BoxShape.circle,
-        border: Border.all(color: Colors.white, width: 2),
-        boxShadow: const [BoxShadow(color: Colors.black45, blurRadius: 4)],
-      ),
+      decoration: BoxDecoration(color: color, shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 2), boxShadow: const [BoxShadow(color: Colors.black45, blurRadius: 4)]),
       child: Icon(_getCategoryIcon(category), color: Colors.black, size: 20),
     );
   }
@@ -107,22 +93,18 @@ class _HomeScreenState extends State<HomeScreen> {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
-      isScrollControlled: true, // Required for custom height
+      isScrollControlled: true,
       builder: (context) {
         return Container(
           padding: const EdgeInsets.all(25),
-          decoration: const BoxDecoration(
-            color: Color(0xFF111111), 
-            borderRadius: BorderRadius.vertical(top: Radius.circular(40)),
-          ),
-          child: SafeArea( // FIX: Prevents overlap with Android Nav Bar
+          decoration: const BoxDecoration(color: Color(0xFF111111), borderRadius: BorderRadius.vertical(top: Radius.circular(40))),
+          child: SafeArea(
             child: Column(
-              mainAxisSize: MainAxisSize.min, // Shrink to fit content
+              mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey[800], borderRadius: BorderRadius.circular(2)))),
                 const SizedBox(height: 20),
-                
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
@@ -134,10 +116,17 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   ],
                 ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    const Icon(Icons.location_on, color: Colors.cyanAccent, size: 14),
+                    const SizedBox(width: 5),
+                    Text("${data['building'] ?? 'Outside'} • ${data['floor'] ?? 'N/A'}", style: const TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold, fontSize: 12)),
+                  ],
+                ),
                 const SizedBox(height: 15),
-                
                 Container(
-                  height: 250, // Fixed image height
+                  height: 250,
                   width: double.infinity,
                   decoration: BoxDecoration(borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.white24)),
                   child: ClipRRect(
@@ -147,24 +136,16 @@ class _HomeScreenState extends State<HomeScreen> {
                         : const Center(child: Icon(Icons.image_not_supported, color: Colors.grey)),
                   ),
                 ),
-                
                 const SizedBox(height: 20),
                 Text(data['description'] ?? "No description.", style: const TextStyle(color: Colors.white70)),
                 const SizedBox(height: 30),
-
-                // UPVOTE BUTTON
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton.icon(
                     onPressed: () => _handleUpvote(docId, data),
                     icon: const Icon(Icons.thumb_up_alt_outlined, color: Colors.black),
                     label: const Text("VERIFY & UPVOTE", style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1)),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.white,
-                      foregroundColor: Colors.black,
-                      padding: const EdgeInsets.symmetric(vertical: 18),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-                    ),
+                    style: ElevatedButton.styleFrom(backgroundColor: Colors.white, foregroundColor: Colors.black, padding: const EdgeInsets.symmetric(vertical: 18), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15))),
                   ),
                 ),
                 const SizedBox(height: 10),
@@ -191,34 +172,19 @@ class _HomeScreenState extends State<HomeScreen> {
                   var data = doc.data() as Map<String, dynamic>;
                   GeoPoint? geo = data['location'];
                   if (geo == null) continue;
-
-                  markers.add(
-                    Marker(
-                      point: LatLng(geo.latitude, geo.longitude),
-                      width: 50, height: 50,
-                      child: GestureDetector(
-                        onTap: () => _showIssueDetails(context, doc.id, data),
-                        child: _buildPinStatic(data['severity'] ?? 'Low', data['category'] ?? 'Other'),
-                      ),
-                    ),
-                  );
+                  markers.add(Marker(
+                    point: LatLng(geo.latitude, geo.longitude),
+                    width: 50, height: 50,
+                    child: GestureDetector(onTap: () => _showIssueDetails(context, doc.id, data), child: _buildPinStatic(data['severity'] ?? 'Low', data['category'] ?? 'Other')),
+                  ));
                 }
               }
-
               return FlutterMap(
-                options: MapOptions(
-                  initialCenter: const LatLng(13.5560, 80.0260), 
-                  initialZoom: 16.5,
-                  interactionOptions: const InteractionOptions(flags: InteractiveFlag.all),
-                ),
-                children: [
-                  TileLayer(urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', userAgentPackageName: 'com.example.lens_fix'),
-                  MarkerLayer(markers: markers),
-                ],
+                options: MapOptions(initialCenter: const LatLng(13.5560, 80.0260), initialZoom: 16.5),
+                children: [TileLayer(urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', userAgentPackageName: 'com.example.lens_fix'), MarkerLayer(markers: markers)],
               );
             },
           ),
-
           Positioned(
             top: 50, right: 20,
             child: GestureDetector(
@@ -231,9 +197,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   builder: (context, snapshot) {
                     if (snapshot.hasData && snapshot.data!.exists) {
                       var data = snapshot.data!.data() as Map<String, dynamic>;
-                      if (data['profileImageBase64'] != null) {
-                        return CircleAvatar(radius: 20, backgroundColor: Colors.black, backgroundImage: MemoryImage(base64Decode(data['profileImageBase64'])));
-                      }
+                      if (data['profileImageBase64'] != null) return CircleAvatar(radius: 20, backgroundImage: MemoryImage(base64Decode(data['profileImageBase64'])));
                     }
                     return const CircleAvatar(radius: 20, backgroundColor: Colors.black, child: Icon(Icons.person, color: Colors.white));
                   },
@@ -241,35 +205,23 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
           ),
-
           if (_showXpNotification)
             Positioned(
-              top: 58, right: 80, 
-              child: FadeInRight( 
+              top: 58, right: 80,
+              child: FadeInRight(
                 duration: const Duration(milliseconds: 500),
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   decoration: BoxDecoration(color: Colors.black.withOpacity(0.9), borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.yellowAccent, width: 1.5), boxShadow: [BoxShadow(color: Colors.yellowAccent.withOpacity(0.3), blurRadius: 10)]),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: const [
-                      Icon(Icons.bolt, color: Colors.yellowAccent, size: 16),
-                      SizedBox(width: 5),
-                      Text("+50 XP", style: TextStyle(color: Colors.yellowAccent, fontWeight: FontWeight.bold, fontSize: 14)),
-                    ],
-                  ),
+                  child: Row(mainAxisSize: MainAxisSize.min, children: const [Icon(Icons.bolt, color: Colors.yellowAccent, size: 16), SizedBox(width: 5), Text("+50 XP", style: TextStyle(color: Colors.yellowAccent, fontWeight: FontWeight.bold, fontSize: 14))]),
                 ),
               ),
             ),
-
           Align(
             alignment: Alignment.bottomCenter,
             child: Container(
               height: 80,
-              margin: EdgeInsets.only(
-                bottom: MediaQuery.of(context).viewPadding.bottom + 20, 
-                left: 20, right: 20
-              ),
+              margin: EdgeInsets.only(bottom: MediaQuery.of(context).viewPadding.bottom + 20, left: 20, right: 20),
               padding: const EdgeInsets.symmetric(horizontal: 20),
               decoration: BoxDecoration(color: Colors.black.withOpacity(0.9), borderRadius: BorderRadius.circular(25), border: Border.all(color: Colors.white24)),
               child: Row(

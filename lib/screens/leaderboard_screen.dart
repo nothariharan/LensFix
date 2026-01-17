@@ -24,14 +24,20 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
         leading: IconButton(icon: const Icon(Icons.arrow_back_ios_new, size: 20, color: Colors.white), onPressed: () => Navigator.pop(context)),
       ),
       body: StreamBuilder<QuerySnapshot>(
-        stream: FirebaseFirestore.instance.collection('users').orderBy('xp', descending: true).limit(10).snapshots(),
+        // Excludes admins and orders by XP
+        stream: FirebaseFirestore.instance
+            .collection('users')
+            .where('role', isNotEqualTo: 'admin')
+            .orderBy('role') 
+            .orderBy('xp', descending: true)
+            .limit(10)
+            .snapshots(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator(color: Colors.white));
           if (!snapshot.hasData || snapshot.data!.docs.isEmpty) return const Center(child: Text("No data available", style: TextStyle(color: Colors.grey)));
 
           final users = snapshot.data!.docs;
 
-          // Helpers
           Map<String, dynamic> getUser(int index) => index < users.length ? users[index].data() as Map<String, dynamic> : {};
           String getName(int index) => (getUser(index)['displayName'] ?? (getUser(index)['email'] ?? "User").split('@')[0]);
           String getScore(int index) => "${getUser(index)['xp'] ?? 0}";
@@ -99,16 +105,23 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
       children: [
         Stack(
           alignment: Alignment.topRight,
-          clipBehavior: Clip.none,
           children: [
-            Container(padding: const EdgeInsets.all(3), decoration: BoxDecoration(shape: BoxShape.circle, color: isWinner ? Colors.white : Colors.grey[800]), child: CircleAvatar(radius: 30, backgroundColor: isWinner ? Colors.black : Colors.black54, child: Text(name[0].toUpperCase(), style: TextStyle(fontWeight: FontWeight.bold, color: isWinner ? Colors.white : Colors.grey, fontSize: 20)))),
-            if (isWinner) const Positioned(top: -15, right: -5, child: Icon(Icons.workspace_premium, color: Color(0xFFFFD700), size: 30)), 
+            // Avatar Fix for Podium
+            Container(
+              padding: const EdgeInsets.all(3), 
+              decoration: BoxDecoration(shape: BoxShape.circle, color: isWinner ? Colors.white : Colors.grey[800]), 
+              child: CircleAvatar(
+                radius: 30, 
+                backgroundColor: isWinner ? Colors.black : Colors.black54, 
+                child: Text(name[0].toUpperCase(), style: TextStyle(fontWeight: FontWeight.bold, color: isWinner ? Colors.white : Colors.grey, fontSize: 20))
+              )
+            ),
           ],
         ),
         const SizedBox(height: 15),
         Container(
           width: 90, height: height,
-          decoration: BoxDecoration(color: color, borderRadius: const BorderRadius.vertical(top: Radius.circular(15)), border: Border.all(color: isWinner ? const Color(0xFFFFD700) : Colors.white24, width: isWinner ? 2 : 1), boxShadow: isWinner ? [BoxShadow(color: const Color(0xFFFFD700).withOpacity(0.4), blurRadius: 25, spreadRadius: 1)] : []),
+          decoration: BoxDecoration(color: color, borderRadius: const BorderRadius.vertical(top: Radius.circular(15)), border: Border.all(color: isWinner ? const Color(0xFFFFD700) : Colors.white24, width: isWinner ? 2 : 1)),
           child: FittedBox(
             fit: BoxFit.scaleDown,
             child: Padding(
@@ -119,7 +132,6 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
                   Text(rank.toString(), style: GoogleFonts.bebasNeue(fontSize: 48, color: rankColor)),
                   const SizedBox(height: 4),
                   Text(name, style: TextStyle(color: textColor, fontWeight: FontWeight.bold, fontSize: 14)),
-                  // HELPER BADGE
                   if (role.toLowerCase() == 'helper')
                     Container(margin: const EdgeInsets.symmetric(vertical: 2), padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1), decoration: BoxDecoration(color: Colors.orange, borderRadius: BorderRadius.circular(4)), child: const Text("HELPER", style: TextStyle(fontSize: 8, fontWeight: FontWeight.bold, color: Colors.black))),
                   const SizedBox(height: 2),

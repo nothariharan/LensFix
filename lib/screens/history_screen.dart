@@ -11,83 +11,31 @@ class HistoryScreen extends StatelessWidget {
     final String? uid = FirebaseAuth.instance.currentUser?.uid;
 
     return Scaffold(
-      backgroundColor: Colors.black, // NOIR THEME
+      backgroundColor: Colors.black,
       appBar: AppBar(
         title: Text("MY REPORTS", style: GoogleFonts.bebasNeue(letterSpacing: 2, color: Colors.white)),
         centerTitle: true,
         backgroundColor: Colors.transparent,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, color: Colors.white),
-          onPressed: () => Navigator.pop(context),
-        ),
+        leading: IconButton(icon: const Icon(Icons.arrow_back_ios, color: Colors.white), onPressed: () => Navigator.pop(context)),
       ),
       body: uid == null 
           ? const Center(child: Text("Please Login", style: TextStyle(color: Colors.white)))
           : StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instance
-                  .collection('issues')
-                  .where('reportedBy', isEqualTo: uid) // Dynamic User Filter
-                  .orderBy('timestamp', descending: true)
-                  .snapshots(),
+              stream: FirebaseFirestore.instance.collection('issues').where('reportedBy', isEqualTo: uid).orderBy('timestamp', descending: true).snapshots(),
               builder: (context, snapshot) {
-                
-                // 1. Loading State
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator(color: Colors.white));
-                }
-
-                // 2. Empty State
+                if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator(color: Colors.white));
                 if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                  return Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.history, size: 50, color: Colors.grey[800]),
-                        const SizedBox(height: 15),
-                        const Text("No reports yet.", style: TextStyle(color: Colors.grey)),
-                      ],
-                    ),
-                  );
+                  return Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [Icon(Icons.history, size: 50, color: Colors.grey[800]), const SizedBox(height: 15), const Text("No reports yet.", style: TextStyle(color: Colors.grey))]));
                 }
-
-                // 3. Separate Data into Sections
                 var docs = snapshot.data!.docs;
                 var completed = docs.where((doc) => doc['status'] == 'Resolved').toList();
                 var inProgress = docs.where((doc) => doc['status'] != 'Resolved').toList();
 
                 return ListView(
-                  padding: const EdgeInsets.all(20),
+                  padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.of(context).viewPadding.bottom + 20),
                   children: [
-                    // COMPLETED SECTION
-                    if (completed.isNotEmpty) ...[
-                      _buildSectionTitle("COMPLETED"),
-                      ...completed.map((doc) {
-                        var data = doc.data() as Map<String, dynamic>;
-                        return _buildHistoryCard(
-                          data['title'] ?? "Issue",
-                          data['category'] ?? "General", // Using Category as sub-text
-                          _formatTimestamp(data['timestamp']),
-                          Icons.check_circle,
-                          Colors.greenAccent,
-                        );
-                      }),
-                      const SizedBox(height: 30),
-                    ],
-
-                    // IN PROGRESS SECTION
-                    if (inProgress.isNotEmpty) ...[
-                      _buildSectionTitle("IN PROGRESS"),
-                      ...inProgress.map((doc) {
-                        var data = doc.data() as Map<String, dynamic>;
-                        return _buildHistoryCard(
-                          data['title'] ?? "Issue",
-                          data['category'] ?? "General",
-                          _formatTimestamp(data['timestamp']),
-                          Icons.pending,
-                          Colors.orangeAccent,
-                        );
-                      }),
-                    ],
+                    if (completed.isNotEmpty) ...[_buildSectionTitle("COMPLETED"), ...completed.map((doc) => _buildCardFromDoc(doc, Colors.greenAccent, Icons.check_circle)), const SizedBox(height: 30)],
+                    if (inProgress.isNotEmpty) ...[_buildSectionTitle("IN PROGRESS"), ...inProgress.map((doc) => _buildCardFromDoc(doc, Colors.orangeAccent, Icons.pending))],
                   ],
                 );
               },
@@ -95,63 +43,39 @@ class HistoryScreen extends StatelessWidget {
     );
   }
 
-  // --- HELPER: Simple Relative Time Formatter ---
+  Widget _buildCardFromDoc(DocumentSnapshot doc, Color color, IconData icon) {
+    var data = doc.data() as Map<String, dynamic>;
+    String locationStr = "${data['building'] ?? 'Campus'} • ${data['floor'] ?? 'Ground'}";
+    return _buildHistoryCard(data['title'] ?? "Issue", locationStr, _formatTimestamp(data['timestamp']), icon, color);
+  }
+
   String _formatTimestamp(Timestamp? timestamp) {
     if (timestamp == null) return "Just now";
-    final now = DateTime.now();
-    final date = timestamp.toDate();
-    final diff = now.difference(date);
-
+    final diff = DateTime.now().difference(timestamp.toDate());
     if (diff.inMinutes < 60) return "${diff.inMinutes} mins ago";
     if (diff.inHours < 24) return "${diff.inHours} hrs ago";
     return "${diff.inDays} days ago";
   }
 
-  // --- YOUR ORIGINAL UI WIDGETS (UNCHANGED) ---
-
   Widget _buildSectionTitle(String title) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 15, left: 5),
-      child: Text(
-        title,
-        style: const TextStyle(color: Colors.grey, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1),
-      ),
-    );
+    return Padding(padding: const EdgeInsets.only(bottom: 15, left: 5), child: Text(title, style: const TextStyle(color: Colors.grey, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1)));
   }
 
   Widget _buildHistoryCard(String title, String location, String time, IconData icon, Color color) {
     return Container(
       margin: const EdgeInsets.only(bottom: 15),
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: const Color(0xFF111111), // Matte Dark Grey
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withOpacity(0.05)),
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(icon, color: color, size: 24),
-          ),
-          const SizedBox(width: 15),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
-                const SizedBox(height: 4),
-                Text(location, style: TextStyle(color: Colors.grey[600], fontSize: 12)),
-              ],
-            ),
-          ),
-          Text(time, style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.bold)),
-        ],
-      ),
+      decoration: BoxDecoration(color: const Color(0xFF111111), borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.white.withOpacity(0.05))),
+      child: Row(children: [
+        Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: color.withOpacity(0.1), shape: BoxShape.circle), child: Icon(icon, color: color, size: 24)),
+        const SizedBox(width: 15),
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+          const SizedBox(height: 4),
+          Text(location, style: TextStyle(color: Colors.grey[600], fontSize: 12)),
+        ])),
+        Text(time, style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.bold)),
+      ]),
     );
   }
 }

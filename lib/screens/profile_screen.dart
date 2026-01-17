@@ -81,17 +81,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 String email = data?['email'] ?? "Student";
                 String displayName = data?['displayName'] ?? email.split('@')[0]; 
                 String? dbImage = data?['profileImageBase64'];
-                String role = data?['role'] ?? 'student'; // Get Role
+                String role = data?['role'] ?? 'student';
+                
+                // Persistence Logic
+                bool isHelper = role.toLowerCase() == 'helper';
+                int fixedCount = data?['fixedCount'] ?? 0;
+                int reportedCount = data?['reports'] ?? 0;
                 
                 int level = (xp / 500).floor() + 1;
-                bool isHelper = role.toLowerCase() == 'helper';
 
                 return SingleChildScrollView(
                   child: Column(
                     children: [
                       const SizedBox(height: 20),
                       
-                      // AVATAR
                       GestureDetector(
                         onTap: _pickAndSaveImage,
                         child: Stack(
@@ -146,25 +149,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         padding: const EdgeInsets.symmetric(horizontal: 20),
                         child: Row(
                           children: [
+                            // Show actual XP from DB
                             _buildStatCard("XP EARNED", "$xp", Colors.amberAccent),
                             const SizedBox(width: 15),
                             
-                            // DYNAMIC COUNT (Reported vs Resolved)
-                            FutureBuilder<AggregateQuerySnapshot>(
-                              future: FirebaseFirestore.instance
-                                  .collection('issues')
-                                  .where(isHelper ? 'resolvedBy' : 'reportedBy', isEqualTo: uid) // Logic Switch
-                                  .count()
-                                  .get(),
-                              builder: (context, countSnap) {
-                                String count = countSnap.hasData ? "${countSnap.data!.count}" : "-";
-                                return _buildStatCard(
-                                  isHelper ? "REPORTS FIXED" : "ISSUES REPORTED", // Label Switch
-                                  count, 
-                                  Colors.greenAccent, 
-                                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const HistoryScreen())),
-                                );
-                              }
+                            // HELPER: fixedCount (100xp/ea) | STUDENT: reports (50xp/ea)
+                            _buildStatCard(
+                              isHelper ? "REPORTS FIXED" : "ISSUES REPORTED", 
+                              isHelper ? "$fixedCount" : "$reportedCount", 
+                              Colors.greenAccent, 
+                              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const HistoryScreen())),
                             ),
                           ],
                         ),
@@ -183,14 +177,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               .get(),
                           builder: (context, rankSnap) {
                             String rankDisplay = "#--";
-                            
                             if (rankSnap.hasData && rankSnap.data != null) {
-                              // FIX: Use '?? 0' to handle if count is null
                               int count = rankSnap.data?.count ?? 0;
                               int myRank = count + 1; 
                               rankDisplay = "#$myRank";
                             }
-                            
                             return _buildWideStatCard("CURRENT RANK", rankDisplay, Colors.white);
                           }
                         ),

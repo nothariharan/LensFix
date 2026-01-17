@@ -4,11 +4,11 @@ import 'package:image_picker/image_picker.dart';
 import 'package:animate_do/animate_do.dart';
 import 'package:lens_fix/services/gemini_service.dart';
 import 'package:lens_fix/services/database_service.dart';
+import 'package:lens_fix/utils/location_helper.dart'; 
 import 'package:google_fonts/google_fonts.dart';
 import 'package:geolocator/geolocator.dart';
 
 class CameraScreen extends StatefulWidget {
-  // 1. Accept Escalation Flag
   final bool isEscalation; 
   const CameraScreen({super.key, this.isEscalation = false});
 
@@ -70,6 +70,74 @@ class _CameraScreenState extends State<CameraScreen> {
     }
   }
 
+  // --- UPDATED NOIR FLOOR PICKER WITH DYNAMIC LOGIC ---
+  Future<String> _showFloorPicker(String building) async {
+    List<String> options = ["Ground Floor"];
+
+    if (building.contains("Acad Block")) {
+      options = ["Basement", "Ground Floor", "1st Floor", "2nd Floor"];
+    } else if (building.contains("Boys Hostel")) {
+      options = ["Ground Floor", "1st Floor", "2nd Floor", "3rd Floor", "4th Floor"];
+    } else if (building.contains("Girls Hostel")) {
+      options = ["Ground Floor", "1st Floor", "2nd Floor", "3rd Floor", "4th Floor", "5th Floor"];
+    } else if (building.contains("Mess")) {
+      options = ["Ground Floor", "1st Floor"];
+    }
+
+    String selected = options[0];
+
+    await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF111111),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+          side: const BorderSide(color: Colors.white24, width: 1),
+        ),
+        title: Column(
+          children: [
+            const Icon(Icons.layers_outlined, color: Colors.white, size: 30),
+            const SizedBox(height: 10),
+            Text(building.toUpperCase(), style: GoogleFonts.bebasNeue(color: Colors.white, fontSize: 24, letterSpacing: 1.5)),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text("Identify your current floor level:", style: TextStyle(color: Colors.grey, fontSize: 13), textAlign: TextAlign.center),
+            const SizedBox(height: 25),
+            DropdownButtonFormField<String>(
+              value: selected,
+              dropdownColor: const Color(0xFF1A1A1A),
+              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+              decoration: InputDecoration(
+                filled: true,
+                fillColor: Colors.white.withOpacity(0.05),
+                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Colors.white10)),
+                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Colors.white)),
+              ),
+              items: options.map((f) => DropdownMenuItem(value: f, child: Text(f))).toList(),
+              onChanged: (val) => selected = val!,
+            ),
+          ],
+        ),
+        actionsPadding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+        actions: [
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: () => Navigator.pop(context),
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.white, foregroundColor: Colors.black, padding: const EdgeInsets.symmetric(vertical: 16), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+              child: const Text("CONFIRM LOCATION", style: TextStyle(fontWeight: FontWeight.bold)),
+            ),
+          )
+        ],
+      ),
+    );
+    return selected;
+  }
+
   void _editReport() {
     if (_analysisData == null) return;
     TextEditingController titleCtrl = TextEditingController(text: _analysisData!['title']);
@@ -115,21 +183,18 @@ class _CameraScreenState extends State<CameraScreen> {
 
   Future<void> _submitReport() async {
     if (_selectedImage == null || _analysisData == null) return;
-
-    setState(() { _isLoading = true; _statusMessage = "COMPRESSING EVIDENCE..."; });
+    setState(() { _isLoading = true; _statusMessage = "ACQUIRING GPS..."; });
 
     try {
-      _statusMessage = "ACQUIRING GPS COORDINATES..."; setState(() {});
-      
-      LocationPermission permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-        if (permission == LocationPermission.denied) throw Exception("Location permissions denied");
-      }
-      
       Position position = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
+      String building = BuildingDetection.getBuildingName(position.latitude, position.longitude);
+      String floor = "N/A";
 
-      _statusMessage = "ENCODING DATA..."; setState(() {});
+      if (building != "Campus Grounds") {
+        floor = await _showFloorPicker(building);
+      }
+
+      _statusMessage = "COMPRESSING EVIDENCE..."; setState(() {});
       String imageBase64 = await _dbService.convertImageToBase64(_selectedImage!);
 
       _statusMessage = "FINALIZING REPORT..."; setState(() {});
@@ -137,7 +202,9 @@ class _CameraScreenState extends State<CameraScreen> {
         aiData: _analysisData!, 
         imageBase64: imageBase64, 
         position: position,
-        isEscalation: widget.isEscalation, // 2. Pass Flag to DB
+        building: building,
+        floor: floor,
+        isEscalation: widget.isEscalation,
       );
 
       if (!mounted) return;
@@ -164,7 +231,6 @@ class _CameraScreenState extends State<CameraScreen> {
       backgroundColor: Colors.black, 
       appBar: AppBar(
         backgroundColor: Colors.transparent,
-        // 3. Change Title based on mode
         title: Text(widget.isEscalation ? "ESCALATION MODE" : "ISSUE SCANNER", style: GoogleFonts.bebasNeue(letterSpacing: 2, fontSize: 24, color: widget.isEscalation ? Colors.orangeAccent : Colors.white)),
         centerTitle: true,
         leading: IconButton(icon: const Icon(Icons.close, color: Colors.white), onPressed: () => Navigator.pop(context)),
@@ -189,10 +255,7 @@ class _CameraScreenState extends State<CameraScreen> {
             child: Container(
               width: double.infinity,
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
-              decoration: const BoxDecoration(
-                color: Color(0xFF111111), 
-                borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
-              ),
+              decoration: const BoxDecoration(color: Color(0xFF111111), borderRadius: BorderRadius.vertical(top: Radius.circular(30))),
               child: SafeArea(
                 top: false,
                 child: Column(
@@ -215,9 +278,7 @@ class _CameraScreenState extends State<CameraScreen> {
                                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Expanded(
-                                      child: Text(_analysisData!['title'] ?? "Unknown Issue", style: GoogleFonts.bebasNeue(color: Colors.white, fontSize: 28, letterSpacing: 1)),
-                                    ),
+                                    Expanded(child: Text(_analysisData!['title'] ?? "Unknown Issue", style: GoogleFonts.bebasNeue(color: Colors.white, fontSize: 28, letterSpacing: 1))),
                                     IconButton(onPressed: _editReport, icon: const Icon(Icons.edit, color: Colors.white54, size: 20)),
                                   ],
                                 ),
@@ -225,11 +286,7 @@ class _CameraScreenState extends State<CameraScreen> {
                                   alignment: Alignment.centerLeft,
                                   child: Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                    decoration: BoxDecoration(
-                                      color: _getSeverityColor(_analysisData!['severity']).withOpacity(0.1),
-                                      border: Border.all(color: _getSeverityColor(_analysisData!['severity'])),
-                                      borderRadius: BorderRadius.circular(20),
-                                    ),
+                                    decoration: BoxDecoration(color: _getSeverityColor(_analysisData!['severity']).withOpacity(0.1), border: Border.all(color: _getSeverityColor(_analysisData!['severity'])), borderRadius: BorderRadius.circular(20)),
                                     child: Text((_analysisData!['severity'] ?? "INFO").toUpperCase(), style: TextStyle(color: _getSeverityColor(_analysisData!['severity']), fontWeight: FontWeight.bold, fontSize: 12)),
                                   ),
                                 ),
@@ -263,29 +320,18 @@ class _CameraScreenState extends State<CameraScreen> {
                           ),
                         ),
                       ),
-                    
                     const SizedBox(height: 15), 
-
                     if (!_isLoading)
                       Row(
                         children: [
-                          Expanded(
-                            child: OutlinedButton(
-                              onPressed: _pickImage,
-                              style: OutlinedButton.styleFrom(side: const BorderSide(color: Colors.white24), padding: const EdgeInsets.symmetric(vertical: 16), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-                              child: const Text("RETAKE", style: TextStyle(color: Colors.white)),
-                            ),
-                          ),
+                          Expanded(child: OutlinedButton(onPressed: _pickImage, style: OutlinedButton.styleFrom(side: const BorderSide(color: Colors.white24), padding: const EdgeInsets.symmetric(vertical: 16), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))), child: const Text("RETAKE", style: TextStyle(color: Colors.white)))),
                           const SizedBox(width: 16),
-                          Expanded(
-                            flex: 2,
-                            child: ElevatedButton.icon(
-                              onPressed: _analysisData == null ? _analyzeImage : _submitReport,
-                              style: ElevatedButton.styleFrom(backgroundColor: widget.isEscalation ? Colors.orangeAccent : Colors.white, foregroundColor: Colors.black, padding: const EdgeInsets.symmetric(vertical: 16), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-                              icon: Icon(_analysisData == null ? Icons.analytics : Icons.cloud_upload, color: Colors.black),
-                              label: Text(_analysisData == null ? "ANALYZE ISSUE" : (widget.isEscalation ? "ESCALATE REPORT" : "SUBMIT REPORT"), style: const TextStyle(fontWeight: FontWeight.bold)),
-                            ),
-                          ),
+                          Expanded(flex: 2, child: ElevatedButton.icon(
+                            onPressed: _analysisData == null ? _analyzeImage : _submitReport,
+                            style: ElevatedButton.styleFrom(backgroundColor: widget.isEscalation ? Colors.orangeAccent : Colors.white, foregroundColor: Colors.black, padding: const EdgeInsets.symmetric(vertical: 16), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                            icon: Icon(_analysisData == null ? Icons.analytics : Icons.cloud_upload, color: Colors.black),
+                            label: Text(_analysisData == null ? "ANALYZE ISSUE" : (widget.isEscalation ? "ESCALATE REPORT" : "SUBMIT REPORT"), style: const TextStyle(fontWeight: FontWeight.bold)),
+                          )),
                         ],
                       ),
                   ],

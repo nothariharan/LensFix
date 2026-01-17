@@ -59,76 +59,46 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     );
   }
 
+  // Locate the _showIssueDetails function in AdminDashboardScreen and update it as follows:
+
   void _showIssueDetails(String docId, Map<String, dynamic> data) {
     bool isUrgent = data['isUrgent'] == true;
-
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
-      isScrollControlled: true, // Allow full height control
+      isScrollControlled: true,
       builder: (context) {
         return Container(
           padding: const EdgeInsets.all(25),
-          decoration: const BoxDecoration(
-            color: Color(0xFF050510), 
-            borderRadius: BorderRadius.vertical(top: Radius.circular(40)),
-            border: Border(top: BorderSide(color: Colors.cyanAccent, width: 1)),
-          ),
-          child: SafeArea( // FIX: Prevents button overlap
-            child: Column(
-              mainAxisSize: MainAxisSize.min, // Shrink to fit content
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey[800], borderRadius: BorderRadius.circular(2)))),
-                const SizedBox(height: 20),
-                
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Expanded(child: Text(data['title'] ?? "Issue", style: GoogleFonts.bebasNeue(fontSize: 28, color: Colors.white))),
-                    if (data['isEscalation'] == true)
-                      Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), decoration: BoxDecoration(color: Colors.red, borderRadius: BorderRadius.circular(8)), child: const Text("ESCALATED", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 10))),
-                  ],
-                ),
-                const SizedBox(height: 10),
-
-                Container(
-                  height: 250, // Fixed height for image area
-                  width: double.infinity,
-                  decoration: BoxDecoration(borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.white24)),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(20),
-                    child: data['imageBase64'] != null
-                        ? Image.memory(base64Decode(data['imageBase64']), fit: BoxFit.cover)
-                        : const Center(child: Icon(Icons.image_not_supported, color: Colors.grey)),
-                  ),
-                ),
-
-                const SizedBox(height: 20),
-                Text(data['description'] ?? "No description.", style: const TextStyle(color: Colors.white70)),
-                const SizedBox(height: 30),
-
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    onPressed: () async {
-                      Navigator.pop(context);
-                      await _dbService.toggleUrgentStatus(docId, isUrgent);
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: isUrgent ? Colors.grey[800] : Colors.redAccent, 
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-                      side: BorderSide(color: isUrgent ? Colors.white24 : Colors.redAccent),
-                    ),
-                    icon: Icon(isUrgent ? Icons.notifications_off : Icons.notification_important),
-                    label: Text(isUrgent ? "UNMARK URGENT" : "MARK AS URGENT", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                  ),
-                ),
-                const SizedBox(height: 10), // Extra space
-              ],
-            ),
+          decoration: const BoxDecoration(color: Color(0xFF050510), borderRadius: BorderRadius.vertical(top: Radius.circular(40)), border: Border(top: BorderSide(color: Colors.cyanAccent, width: 1))),
+          child: SafeArea(
+            child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey[800], borderRadius: BorderRadius.circular(2)))),
+              const SizedBox(height: 20),
+              Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                Expanded(child: Text(data['title'] ?? "Issue", style: GoogleFonts.bebasNeue(fontSize: 28, color: Colors.white))),
+                if (data['isEscalation'] == true) Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), decoration: BoxDecoration(color: Colors.red, borderRadius: BorderRadius.circular(8)), child: const Text("ESCALATED", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 10))),
+              ]),
+              const SizedBox(height: 5),
+              // --- LOCATION BADGE ---
+              Row(children: [
+                const Icon(Icons.location_on, color: Colors.cyanAccent, size: 14),
+                const SizedBox(width: 5),
+                Text("${data['building'] ?? 'Outside'} • Floor: ${data['floor'] ?? 'N/A'}", style: const TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold, fontSize: 12)),
+              ]),
+              const SizedBox(height: 15),
+              Container(height: 250, width: double.infinity, decoration: BoxDecoration(borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.white24)), child: ClipRRect(borderRadius: BorderRadius.circular(20), child: data['imageBase64'] != null ? Image.memory(base64Decode(data['imageBase64']), fit: BoxFit.cover) : const Center(child: Icon(Icons.image_not_supported, color: Colors.grey)))),
+              const SizedBox(height: 20),
+              Text(data['description'] ?? "No description.", style: const TextStyle(color: Colors.white70)),
+              const SizedBox(height: 30),
+              SizedBox(width: double.infinity, child: ElevatedButton.icon(
+                onPressed: () async { Navigator.pop(context); await _dbService.toggleUrgentStatus(docId, isUrgent); },
+                style: ElevatedButton.styleFrom(backgroundColor: isUrgent ? Colors.grey[800] : Colors.redAccent, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 16), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15))),
+                icon: Icon(isUrgent ? Icons.notifications_off : Icons.notification_important),
+                label: Text(isUrgent ? "UNMARK URGENT" : "MARK AS URGENT", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+              )),
+              const SizedBox(height: 10),
+            ]),
           ),
         );
       },
