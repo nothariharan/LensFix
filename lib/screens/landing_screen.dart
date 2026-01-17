@@ -3,7 +3,8 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:lens_fix/screens/login_screen.dart';
 import 'package:animate_do/animate_do.dart';
-
+import 'package:firebase_auth/firebase_auth.dart'; // Import Auth
+import 'package:lens_fix/screens/home_screen.dart';
 class LandingScreen extends StatefulWidget {
   const LandingScreen({super.key});
 
@@ -18,19 +19,23 @@ class _LandingScreenState extends State<LandingScreen> with TickerProviderStateM
   void initState() {
     super.initState();
     
-    // Animation Controller for the rotating rings
     _controller = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 10),
     )..repeat();
 
-    // Navigate to Login after 4 seconds
+    // SMART NAVIGATION CHECK
     Timer(const Duration(seconds: 4), () {
+      // Check if user is logged in
+      User? user = FirebaseAuth.instance.currentUser;
+
+      Widget nextScreen = (user != null) ? const HomeScreen() : const LoginScreen();
+
       Navigator.pushReplacement(
         context, 
         PageRouteBuilder(
           transitionDuration: const Duration(milliseconds: 1000),
-          pageBuilder: (_, __, ___) => const LoginScreen(),
+          pageBuilder: (_, __, ___) => nextScreen, // Navigate dynamically
           transitionsBuilder: (_, animation, __, child) {
             return FadeTransition(opacity: animation, child: child);
           },

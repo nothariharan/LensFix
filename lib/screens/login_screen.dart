@@ -1,6 +1,8 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:animate_do/animate_do.dart'; 
-import 'package:lens_fix/screens/home_screen.dart'; 
+import 'package:lens_fix/screens/home_screen.dart';
+import 'package:lens_fix/services/auth_service.dart'; // Import the service
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -12,9 +14,52 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _authService = AuthService(); // Connect to Firebase
+  
+  bool _isLoading = false; // Controls the spinner
 
-  void _handleLogin() {
-    Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const HomeScreen()));
+  Future<void> _handleLogin() async {
+    final email = _emailController.text.trim();
+    final password = _passwordController.text.trim();
+
+    // 1. Basic Validation
+    if (email.isEmpty || password.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Please enter Email & Password"), backgroundColor: Colors.redAccent),
+      );
+      return;
+    }
+
+    // 2. Start Loading
+    setState(() => _isLoading = true);
+
+    try {
+      // 3. Attempt Login with Firebase
+      await _authService.signIn(email, password);
+
+      // 4. Success? Go to Home
+      if (!mounted) return;
+      Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const HomeScreen()));
+
+    } on FirebaseAuthException catch (e) {
+      // 5. Firebase Error (Wrong password, user not found)
+      String message = "Authentication Failed";
+      if (e.code == 'user-not-found') message = "User not found. Contact Admin.";
+      if (e.code == 'wrong-password') message = "Incorrect Password.";
+      if (e.code == 'invalid-email') message = "Invalid Email Format.";
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message), backgroundColor: Colors.redAccent),
+      );
+    } catch (e) {
+      // Generic Error
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Error: ${e.toString()}"), backgroundColor: Colors.redAccent),
+      );
+    } finally {
+      // 6. Stop Loading (if we haven't navigated away)
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
   @override
@@ -31,25 +76,18 @@ class _LoginScreenState extends State<LoginScreen> {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    // --- UPDATED LOGO SECTION ---
                     ZoomIn(
                       duration: const Duration(milliseconds: 800),
                       child: Container(
-                        height: 140, width: 140, // Slightly larger
-                        padding: const EdgeInsets.all(10), // Padding inside the circle
+                        height: 140, width: 140,
+                        padding: const EdgeInsets.all(10),
                         decoration: BoxDecoration(
                           color: Colors.transparent,
                           shape: BoxShape.circle,
-                          border: Border.all(color: Colors.white, width: 2), // Thin White Border
-                          boxShadow: [
-                             BoxShadow(color: Colors.white.withOpacity(0.1), blurRadius: 20)
-                          ]
+                          border: Border.all(color: Colors.white, width: 2),
+                          boxShadow: [BoxShadow(color: Colors.white.withOpacity(0.1), blurRadius: 20)],
                         ),
-                        child: Image.asset(
-                          'assets/logo.png', // <--- YOUR NEW LOGO
-                          color: Colors.white, // Ensure it matches the theme
-                          fit: BoxFit.contain,
-                        ),
+                        child: Image.asset('assets/logo.png', color: Colors.white, fit: BoxFit.contain),
                       ),
                     ),
                     const SizedBox(height: 30),
@@ -66,7 +104,7 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
             ),
 
-            // BOTTOM SECTION: LOGIN
+            // BOTTOM SECTION: LOGIN PANEL
             Expanded(
               flex: 4,
               child: FadeInUp(
@@ -78,29 +116,40 @@ class _LoginScreenState extends State<LoginScreen> {
                     color: Color(0xFF111111), // Dark Grey Panel
                     borderRadius: BorderRadius.only(topLeft: Radius.circular(40), topRight: Radius.circular(40)),
                   ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text("Welcome Back", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 24)),
-                      const SizedBox(height: 20),
-                      _buildTextField("College Email", Icons.alternate_email, _emailController),
-                      const SizedBox(height: 15),
-                      _buildTextField("Password", Icons.lock_outline, _passwordController, isPassword: true),
-                      const Spacer(),
-                      SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton(
-                          onPressed: _handleLogin,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.white, // White Button
-                            foregroundColor: Colors.black, // Black Text
-                            padding: const EdgeInsets.symmetric(vertical: 18),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  child: SingleChildScrollView(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text("Welcome Back", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 24)),
+                        const SizedBox(height: 20),
+                        
+                        _buildTextField("College Email", Icons.alternate_email, _emailController),
+                        const SizedBox(height: 15),
+                        _buildTextField("Password", Icons.lock_outline, _passwordController, isPassword: true),
+                        
+                        const SizedBox(height: 30),
+                        
+                        // LOGIN BUTTON (With Spinner)
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton(
+                            onPressed: _isLoading ? null : _handleLogin, // Disable if loading
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.white,
+                              foregroundColor: Colors.black,
+                              padding: const EdgeInsets.symmetric(vertical: 18),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            ),
+                            child: _isLoading 
+                              ? const SizedBox(
+                                  height: 20, width: 20, 
+                                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black)
+                                )
+                              : const Text("ENTER CAMPUS", style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1)),
                           ),
-                          child: const Text("ENTER CAMPUS", style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1)),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -121,10 +170,10 @@ class _LoginScreenState extends State<LoginScreen> {
         labelStyle: TextStyle(color: Colors.grey[600]),
         prefixIcon: Icon(icon, color: Colors.white70),
         filled: true,
-        fillColor: Colors.black, // Inner Black
+        fillColor: Colors.black, 
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.white24)),
-        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Colors.white)), // White Focus
+        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Colors.white24)),
+        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Colors.white)), 
       ),
     );
   }
