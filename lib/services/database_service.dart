@@ -7,40 +7,43 @@ import 'package:geolocator/geolocator.dart';
 class DatabaseService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
+  
 
-  // --- ADMIN & SYSTEM HELPERS ---
+  // --- ADMIN ACTIONS ---
+  
+  // 4. Toggle Urgent Status (The Red Phone)
+  Future<void> toggleUrgentStatus(String docId, bool currentStatus) async {
+    await _db.collection('issues').doc(docId).update({
+      'isUrgent': !currentStatus,
+    });
+  }
+  
 
-  // 1. Get Live Stream of All Issues (For Admin Dashboard)
+  // ... (Keep existing methods: getIssuesStream, deleteIssue, resolveIssue, etc.)
+
+  // 1. Get Live Stream of All Issues
   Stream<QuerySnapshot> getIssuesStream() {
     return _db.collection('issues').orderBy('timestamp', descending: true).snapshots();
   }
 
-  // 2. Delete an Issue (Admin Power)
+  // 2. Delete an Issue
   Future<void> deleteIssue(String docId) async {
     await _db.collection('issues').doc(docId).delete();
   }
 
-  // --- HELPER ACTIONS ---
-
-  // 3. Resolve Issue (For Helpers)
+  // 3. Resolve Issue
   Future<void> resolveIssue(String docId) async {
     String userId = _auth.currentUser!.uid;
-    
-    // Mark Issue as Resolved
     await _db.collection('issues').doc(docId).update({
       'status': 'Resolved',
       'resolvedBy': userId,
       'resolvedAt': FieldValue.serverTimestamp(),
     });
-
-    // Reward Helper (+100 XP for fixing stuff!)
     await _db.collection('users').doc(userId).update({
       'xp': FieldValue.increment(100),
       'reports': FieldValue.increment(1), 
     });
   }
-
-  // --- UTILITIES ---
 
   Future<String> convertImageToBase64(File imageFile) async {
     try {
@@ -51,17 +54,12 @@ class DatabaseService {
     }
   }
 
-  // --- USER MANAGEMENT ---
-
   Future<void> ensureUserExists(String role) async {
     User? user = _auth.currentUser;
     if (user == null) return;
-
     DocumentReference userDoc = _db.collection('users').doc(user.uid);
     DocumentSnapshot snapshot = await userDoc.get();
-
     if (!snapshot.exists) {
-      // NEW USER
       await userDoc.set({
         'email': user.email,
         'role': role.toLowerCase(), 
@@ -71,10 +69,7 @@ class DatabaseService {
         'lastActive': FieldValue.serverTimestamp(),
       });
     } else {
-      // EXISTING USER
-      await userDoc.update({
-        'lastActive': FieldValue.serverTimestamp(),
-      });
+      await userDoc.update({'lastActive': FieldValue.serverTimestamp()});
     }
   }
 
@@ -86,13 +81,11 @@ class DatabaseService {
     await _db.collection('users').doc(userId).set(data, SetOptions(merge: true));
   }
 
-  // --- REPORTING LOGIC ---
-
   Future<void> reportIssue({
     required Map<String, dynamic> aiData, 
     required String imageBase64, 
     required Position position,
-    bool isEscalation = false, // ACCEPT FLAG
+    bool isEscalation = false, 
   }) async {
     try {
       String userId = _auth.currentUser!.uid;
@@ -107,14 +100,14 @@ class DatabaseService {
         'imageBase64': imageBase64, 
         'location': GeoPoint(position.latitude, position.longitude),
         'status': 'Pending',
-        'isEscalation': isEscalation, // SAVE FLAG
+        'isEscalation': isEscalation,
+        'isUrgent': false, // Default to not urgent
         'reportedBy': userId,
         'reporterEmail': userEmail,
         'timestamp': FieldValue.serverTimestamp(),
         'upvotes': 0,
       });
 
-      // Update User XP
       await _db.collection('users').doc(userId).set({
         'email': userEmail,
         'xp': FieldValue.increment(50),      
