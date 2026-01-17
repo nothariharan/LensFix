@@ -1,5 +1,6 @@
-import 'dart:async'; // Required for Timer
+import 'dart:async'; 
 import 'dart:convert'; 
+import 'package:firebase_auth/firebase_auth.dart'; // REQUIRED
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart'; 
 import 'package:latlong2/latlong.dart';      
@@ -9,7 +10,7 @@ import 'package:lens_fix/screens/leaderboard_screen.dart';
 import 'package:lens_fix/screens/profile_screen.dart';
 import 'package:lens_fix/screens/history_screen.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:animate_do/animate_do.dart'; // Ensure animate_do is imported
+import 'package:animate_do/animate_do.dart'; 
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -19,18 +20,15 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  
-  // NOTIFICATION STATE
   bool _showXpNotification = false;
+  final String? uid = FirebaseAuth.instance.currentUser?.uid; // Get UID
 
   Future<void> _openCamera() async {
-    // Wait for the Camera Screen to return a result
     final result = await Navigator.push(
       context, 
       MaterialPageRoute(builder: (_) => const CameraScreen())
     );
 
-    // If result is TRUE, it means a report was submitted
     if (result == true) {
       _triggerXpNotification();
     }
@@ -38,14 +36,12 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _triggerXpNotification() {
     setState(() => _showXpNotification = true);
-    
-    // Hide it after 4 seconds
     Timer(const Duration(seconds: 4), () {
       if (mounted) setState(() => _showXpNotification = false);
     });
   }
 
-  // --- MARKER HELPERS (Keep your existing code) ---
+  // --- MARKER HELPERS ---
   IconData _getCategoryIcon(String category) {
     switch (category.trim()) {
       case 'Electrical': return Icons.electrical_services;
@@ -182,30 +178,50 @@ class _HomeScreenState extends State<HomeScreen> {
             },
           ),
 
-          // LAYER 2: PROFILE ICON (EXISTING)
+          // LAYER 2: PROFILE ICON (NOW DYNAMIC!)
           Positioned(
             top: 50, right: 20,
-            child: Container(
-              padding: const EdgeInsets.all(3),
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(color: Colors.white, width: 2),
-                color: Colors.black,
-              ),
-              child: IconButton(
-                icon: const Icon(Icons.person, color: Colors.white),
-                onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ProfileScreen())),
+            child: GestureDetector(
+              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ProfileScreen())),
+              child: Container(
+                padding: const EdgeInsets.all(3),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white, width: 2),
+                  color: Colors.black,
+                ),
+                child: StreamBuilder<DocumentSnapshot>(
+                  stream: uid != null ? FirebaseFirestore.instance.collection('users').doc(uid).snapshots() : null,
+                  builder: (context, snapshot) {
+                    // Check if we have image data
+                    if (snapshot.hasData && snapshot.data!.exists) {
+                      var data = snapshot.data!.data() as Map<String, dynamic>;
+                      if (data['profileImageBase64'] != null) {
+                        return CircleAvatar(
+                          radius: 20,
+                          backgroundColor: Colors.black,
+                          backgroundImage: MemoryImage(base64Decode(data['profileImageBase64'])),
+                        );
+                      }
+                    }
+                    // Fallback Icon
+                    return const CircleAvatar(
+                      radius: 20,
+                      backgroundColor: Colors.black,
+                      child: Icon(Icons.person, color: Colors.white),
+                    );
+                  },
+                ),
               ),
             ),
           ),
 
-          // LAYER 2.5: XP NOTIFICATION (NEW FEATURE)
-          // Located exactly to the LEFT of the Profile Icon
+          // LAYER 2.5: XP NOTIFICATION
           if (_showXpNotification)
             Positioned(
               top: 58, 
-              right: 80, // 20 (padding) + 50 (icon width) + 10 (gap)
-              child: FadeInRight( // Slide in from the right (from profile)
+              right: 80, 
+              child: FadeInRight( 
                 duration: const Duration(milliseconds: 500),
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -227,7 +243,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
 
-          // LAYER 3: DOCK (EXISTING)
+          // LAYER 3: DOCK
           Align(
             alignment: Alignment.bottomCenter,
             child: Container(

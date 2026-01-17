@@ -7,7 +7,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:lens_fix/screens/login_screen.dart';
 import 'package:lens_fix/screens/history_screen.dart'; 
-import 'package:lens_fix/services/database_service.dart'; // Import DB Service
+import 'package:lens_fix/services/database_service.dart'; 
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -21,17 +21,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
   final String? uid = FirebaseAuth.instance.currentUser?.uid;
   final DatabaseService _dbService = DatabaseService();
 
-  // 1. Pick & Save Image
   Future<void> _pickAndSaveImage() async {
     final XFile? pickedFile = await _picker.pickImage(source: ImageSource.gallery, imageQuality: 30);
     if (pickedFile != null) {
-      // Convert to Base64 and Save to DB immediately
       String base64 = await _dbService.convertImageToBase64(File(pickedFile.path));
       await _dbService.updateUserProfile(imageBase64: base64);
     }
   }
 
-  // 2. Edit Name Dialog
   void _editName(String currentName) {
     TextEditingController nameCtrl = TextEditingController(text: currentName);
     showDialog(
@@ -53,6 +50,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           TextButton(
             onPressed: () async {
               if (nameCtrl.text.isNotEmpty) {
+                // Save name exactly as typed (case sensitive)
                 await _dbService.updateUserProfile(name: nameCtrl.text.trim());
                 if(mounted) Navigator.pop(context);
               }
@@ -67,7 +65,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.black, // NOIR THEME
+      backgroundColor: Colors.black, 
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -80,7 +78,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ],
       ),
       
-      // REAL-TIME USER DATA
       body: uid == null 
           ? const Center(child: Text("Please Login"))
           : StreamBuilder<DocumentSnapshot>(
@@ -92,14 +89,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 var data = snapshot.data!.data() as Map<String, dynamic>?;
                 int xp = data?['xp'] ?? 0;
                 String email = data?['email'] ?? "Student";
-                
-                // Name Logic: DB Name -> Email Prefix -> "Student"
-                String displayName = data?['displayName'] ?? email.split('@')[0].toUpperCase();
-                
-                // Image Logic: DB Base64 -> Default Icon
+                String displayName = data?['displayName'] ?? email.split('@')[0]; 
                 String? dbImage = data?['profileImageBase64'];
-
-                // Level Calculation
                 int level = (xp / 500).floor() + 1;
 
                 return SingleChildScrollView(
@@ -126,9 +117,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               child: CircleAvatar(
                                 radius: 60,
                                 backgroundColor: const Color(0xFF111111),
-                                backgroundImage: dbImage != null 
-                                    ? MemoryImage(base64Decode(dbImage)) 
-                                    : null,
+                                backgroundImage: dbImage != null ? MemoryImage(base64Decode(dbImage)) : null,
                                 child: dbImage == null ? const Icon(Icons.person, size: 60, color: Colors.white) : null,
                               ),
                             ),
@@ -164,7 +153,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Text(displayName, style: GoogleFonts.bebasNeue(fontSize: 36, letterSpacing: 2, color: Colors.white)),
+                            // FIXED: Changed font to Outfit to support lowercase letters
+                            Text(displayName, style: GoogleFonts.outfit(fontSize: 32, fontWeight: FontWeight.w700, color: Colors.white)),
                             const SizedBox(width: 8),
                             const Icon(Icons.edit, color: Colors.white24, size: 20),
                           ],
@@ -183,7 +173,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             _buildStatCard("XP EARNED", "$xp", Colors.amberAccent),
                             const SizedBox(width: 15),
                             
-                            // REAL COUNT FETCH
                             FutureBuilder<AggregateQuerySnapshot>(
                               future: FirebaseFirestore.instance
                                   .collection('issues')
@@ -193,7 +182,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               builder: (context, countSnap) {
                                 String count = countSnap.hasData ? "${countSnap.data!.count}" : "-";
                                 return _buildStatCard(
-                                  "ISSUES REPORTED", // UPDATED LABEL
+                                  "ISSUES REPORTED", 
                                   count, 
                                   Colors.greenAccent, 
                                   onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const HistoryScreen())),
@@ -206,12 +195,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       
                       const SizedBox(height: 15),
                       
-                      // REAL RANK FETCH
-                      // REAL RANK FETCH
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 20),
                         child: FutureBuilder<AggregateQuerySnapshot>(
-                          // Count how many users have MORE XP than me
                           future: FirebaseFirestore.instance
                               .collection('users')
                               .where('xp', isGreaterThan: xp)
@@ -219,14 +205,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               .get(),
                           builder: (context, rankSnap) {
                             String rankDisplay = "#--";
-                            
                             if (rankSnap.hasData && rankSnap.data != null) {
-                              // FIX: Handle potential null count with '?? 0'
                               int count = rankSnap.data?.count ?? 0;
                               int myRank = count + 1; 
                               rankDisplay = "#$myRank";
                             }
-                            
                             return _buildWideStatCard("CURRENT RANK", rankDisplay, Colors.white);
                           }
                         ),
@@ -234,7 +217,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
                       const SizedBox(height: 50),
 
-                      // LOGOUT BUTTON
+                      // LOGOUT
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 40),
                         child: OutlinedButton(
@@ -267,7 +250,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  // --- WIDGETS ---
   Widget _buildStatCard(String label, String value, Color color, {VoidCallback? onTap}) {
     return Expanded(
       child: GestureDetector(
@@ -286,7 +268,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(label, style: const TextStyle(color: Colors.grey, fontSize: 10, fontWeight: FontWeight.bold)), // Smaller font for longer label
+                  Text(label, style: const TextStyle(color: Colors.grey, fontSize: 10, fontWeight: FontWeight.bold)),
                   if (onTap != null) Icon(Icons.arrow_forward_ios, size: 12, color: color), 
                 ],
               ),

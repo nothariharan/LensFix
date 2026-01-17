@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:animate_do/animate_do.dart'; 
 import 'package:lens_fix/screens/home_screen.dart';
 import 'package:lens_fix/services/auth_service.dart';
+import 'package:lens_fix/services/database_service.dart'; // Import Database Service
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -15,8 +16,13 @@ class _LoginScreenState extends State<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _authService = AuthService();
+  final _dbService = DatabaseService(); // Initialize DB Service
   
   bool _isLoading = false;
+  
+  // ROLE STATE
+  String _selectedRole = 'Student';
+  final List<String> _roles = ['Student', 'Helper', 'Admin'];
 
   Future<void> _handleLogin() async {
     final email = _emailController.text.trim();
@@ -32,9 +38,17 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _isLoading = true);
 
     try {
+      // 1. Authenticate
       await _authService.signIn(email, password);
+      
+      // 2. Sync Role to Database (Only creates new doc if user is new)
+      await _dbService.ensureUserExists(_selectedRole);
+
       if (!mounted) return;
+      
+      // 3. Navigate (We will add role-based routing later, for now go to Home)
       Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const HomeScreen()));
+
     } on FirebaseAuthException catch (e) {
       String message = "Authentication Failed";
       if (e.code == 'user-not-found') message = "User not found. Contact Admin.";
@@ -113,6 +127,46 @@ class _LoginScreenState extends State<LoginScreen> {
                                 const Text("Welcome Back", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 24)),
                                 const SizedBox(height: 20),
                                 
+                                // ROLE DROPDOWN (NEW)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                                  decoration: BoxDecoration(
+                                    color: Colors.black,
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(color: Colors.white24),
+                                  ),
+                                  child: DropdownButtonHideUnderline(
+                                    child: DropdownButton<String>(
+                                      value: _selectedRole,
+                                      dropdownColor: const Color(0xFF222222),
+                                      icon: const Icon(Icons.arrow_drop_down, color: Colors.white),
+                                      isExpanded: true,
+                                      items: _roles.map((String role) {
+                                        return DropdownMenuItem<String>(
+                                          value: role,
+                                          child: Row(
+                                            children: [
+                                              Icon(
+                                                role == 'Admin' ? Icons.security : (role == 'Helper' ? Icons.build : Icons.school),
+                                                color: Colors.white70,
+                                                size: 20,
+                                              ),
+                                              const SizedBox(width: 10),
+                                              Text(role, style: const TextStyle(color: Colors.white)),
+                                            ],
+                                          ),
+                                        );
+                                      }).toList(),
+                                      onChanged: (String? newValue) {
+                                        setState(() {
+                                          _selectedRole = newValue!;
+                                        });
+                                      },
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 15),
+
                                 _buildTextField("College Email", Icons.alternate_email, _emailController),
                                 const SizedBox(height: 15),
                                 _buildTextField("Password", Icons.lock_outline, _passwordController, isPassword: true),
