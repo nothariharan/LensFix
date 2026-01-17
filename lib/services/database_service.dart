@@ -8,6 +8,7 @@ class DatabaseService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
+  // Helper: Convert File to Base64
   Future<String> convertImageToBase64(File imageFile) async {
     try {
       List<int> imageBytes = await imageFile.readAsBytes();
@@ -17,6 +18,18 @@ class DatabaseService {
     }
   }
 
+  // 1. Update User Profile (Name & Photo)
+  Future<void> updateUserProfile({String? name, String? imageBase64}) async {
+    String userId = _auth.currentUser!.uid;
+    Map<String, dynamic> data = {};
+    
+    if (name != null) data['displayName'] = name;
+    if (imageBase64 != null) data['profileImageBase64'] = imageBase64;
+
+    await _db.collection('users').doc(userId).set(data, SetOptions(merge: true));
+  }
+
+  // 2. Report Issue (With Gamification)
   Future<void> reportIssue({
     required Map<String, dynamic> aiData, 
     required String imageBase64, 
@@ -26,7 +39,7 @@ class DatabaseService {
       String userId = _auth.currentUser!.uid;
       String userEmail = _auth.currentUser!.email ?? "Unknown";
 
-      // 1. Save the Issue
+      // Save Issue
       await _db.collection('issues').add({
         'title': aiData['title'] ?? 'Report',
         'description': aiData['description'] ?? 'No description',
@@ -42,13 +55,12 @@ class DatabaseService {
         'upvotes': 0,
       });
 
-      // 2. Update User Stats (The Gamification Part)
-      // This creates the user doc if it doesn't exist, or updates it if it does.
+      // Update User XP
       await _db.collection('users').doc(userId).set({
         'email': userEmail,
-        'xp': FieldValue.increment(50),      // +50 XP
-        'reports': FieldValue.increment(1),  // +1 Report Count
+        'xp': FieldValue.increment(50),      
         'lastActive': FieldValue.serverTimestamp(),
+        // We removed 'reports' increment here to rely on accurate counting instead
       }, SetOptions(merge: true));
 
     } catch (e) {
