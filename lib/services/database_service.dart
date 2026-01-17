@@ -7,31 +7,25 @@ import 'package:geolocator/geolocator.dart';
 class DatabaseService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
-  
 
   // --- ADMIN ACTIONS ---
   
-  // 4. Toggle Urgent Status (The Red Phone)
   Future<void> toggleUrgentStatus(String docId, bool currentStatus) async {
     await _db.collection('issues').doc(docId).update({
       'isUrgent': !currentStatus,
     });
   }
-  
 
-  // ... (Keep existing methods: getIssuesStream, deleteIssue, resolveIssue, etc.)
-
-  // 1. Get Live Stream of All Issues
   Stream<QuerySnapshot> getIssuesStream() {
     return _db.collection('issues').orderBy('timestamp', descending: true).snapshots();
   }
 
-  // 2. Delete an Issue
   Future<void> deleteIssue(String docId) async {
     await _db.collection('issues').doc(docId).delete();
   }
 
-  // 3. Resolve Issue
+  // --- HELPER ACTIONS ---
+
   Future<void> resolveIssue(String docId) async {
     String userId = _auth.currentUser!.uid;
     await _db.collection('issues').doc(docId).update({
@@ -45,6 +39,8 @@ class DatabaseService {
     });
   }
 
+  // --- UTILITIES ---
+
   Future<String> convertImageToBase64(File imageFile) async {
     try {
       List<int> imageBytes = await imageFile.readAsBytes();
@@ -54,7 +50,8 @@ class DatabaseService {
     }
   }
 
-  // --- UPDATED: ADOPT PRE-AUTHORIZED DATA & SYNC UID ---
+  // --- USER SYNC & MIGRATION ---
+
   Future<void> ensureUserExists(String role) async {
     User? user = _auth.currentUser;
     if (user == null) return;
@@ -63,30 +60,21 @@ class DatabaseService {
     DocumentSnapshot snapshot = await userDoc.get();
 
     if (!snapshot.exists) {
-      // 1. Search if a pre-authorized document exists for this email
-      final query = await _db
-          .collection('users')
-          .where('email', isEqualTo: user.email)
-          .get();
+      final query = await _db.collection('users').where('email', isEqualTo: user.email).get();
 
       if (query.docs.isNotEmpty) {
-        // 2. FOUND: This is the random-ID doc created by Admin
         var preAuthDoc = query.docs.first;
-        var data = preAuthDoc.data();
+        var data = preAuthDoc.data() as Map<String, dynamic>;
 
-        // 3. MIGRATION: Create the new doc with the proper UID
         await userDoc.set({
           ...data,
           'lastActive': FieldValue.serverTimestamp(),
-          // Ensure role matches what Admin intended
         });
 
-        // 4. CLEANUP: Delete the old random-ID document to prevent duplication
         if (preAuthDoc.id != user.uid) {
           await _db.collection('users').doc(preAuthDoc.id).delete();
         }
       } else {
-        // 5. NO PRE-AUTH: Create a standard new user (Fallback)
         await userDoc.set({
           'email': user.email,
           'role': role.toLowerCase(),
@@ -97,7 +85,6 @@ class DatabaseService {
         });
       }
     } else {
-      // EXISTING USER: Just update heartbeat
       await userDoc.update({'lastActive': FieldValue.serverTimestamp()});
     }
   }
@@ -109,6 +96,8 @@ class DatabaseService {
     if (imageBase64 != null) data['profileImageBase64'] = imageBase64;
     await _db.collection('users').doc(userId).set(data, SetOptions(merge: true));
   }
+
+  // --- REPORTING ---
 
   Future<void> reportIssue({
     required Map<String, dynamic> aiData, 
@@ -130,11 +119,12 @@ class DatabaseService {
         'location': GeoPoint(position.latitude, position.longitude),
         'status': 'Pending',
         'isEscalation': isEscalation,
-        'isUrgent': false, // Default to not urgent
+        'isUrgent': false,
         'reportedBy': userId,
         'reporterEmail': userEmail,
         'timestamp': FieldValue.serverTimestamp(),
         'upvotes': 0,
+        'upvotedBy': [],
       });
 
       await _db.collection('users').doc(userId).set({
@@ -146,5 +136,49 @@ class DatabaseService {
     } catch (e) {
       throw Exception("Database Save Failed: $e");
     }
+  }
+
+  // --- NEW: UPVOTE & DYNAMIC ESCALATION ---
+
+  Future<void> upvoteIssue(String docId, Position userPos) async {
+    String userId = _auth.currentUser!.uid;
+    DocumentReference issueRef = _db.collection('issues').doc(docId);
+    DocumentSnapshot doc = await issueRef.get();
+    
+    if (!doc.exists) return;
+    Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
+    GeoPoint issueGeo = data['location'];
+
+    // Proximity Check (20 meters)
+    double distance = Geolocator.distanceBetween(
+      userPos.latitude, userPos.longitude, 
+      issueGeo.latitude, issueGeo.longitude
+    );
+
+    if (distance > 20) throw Exception("Too far away to verify. Move closer.");
+
+    List<dynamic> upvotedBy = data['upvotedBy'] ?? [];
+    if (upvotedBy.contains(userId)) throw Exception("Already verified.");
+
+    int newUpvotes = (data['upvotes'] ?? 0) + 1;
+    String newSeverity = data['severity'];
+    bool newIsUrgent = data['isUrgent'] ?? false;
+
+    // Escalation Logic
+    if (newUpvotes >= 20) {
+      newSeverity = "High";
+      newIsUrgent = true;
+    } else if (newUpvotes >= 10) {
+      newSeverity = "High";
+    } else if (newUpvotes >= 5) {
+      newSeverity = "Medium";
+    }
+
+    await issueRef.update({
+      'upvotes': newUpvotes,
+      'upvotedBy': FieldValue.arrayUnion([userId]),
+      'severity': newSeverity,
+      'isUrgent': newIsUrgent,
+    });
   }
 }

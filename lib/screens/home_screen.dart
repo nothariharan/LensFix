@@ -1,6 +1,6 @@
 import 'dart:async'; 
 import 'dart:convert'; 
-import 'package:firebase_auth/firebase_auth.dart'; // REQUIRED
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart'; 
 import 'package:latlong2/latlong.dart';      
@@ -11,6 +11,8 @@ import 'package:lens_fix/screens/profile_screen.dart';
 import 'package:lens_fix/screens/history_screen.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:animate_do/animate_do.dart'; 
+import 'package:lens_fix/services/database_service.dart';
+import 'package:geolocator/geolocator.dart'; 
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -21,7 +23,38 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   bool _showXpNotification = false;
-  final String? uid = FirebaseAuth.instance.currentUser?.uid; // Get UID
+  final String? uid = FirebaseAuth.instance.currentUser?.uid;
+
+  // --- TOP SNACKBAR HELPER ---
+  void _showTopSnackBar(String message, Color color) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message, textAlign: TextAlign.center, style: const TextStyle(fontWeight: FontWeight.bold)),
+        backgroundColor: color,
+        behavior: SnackBarBehavior.floating,
+        margin: EdgeInsets.only(
+          bottom: MediaQuery.of(context).size.height - 100, // Positions it at the top
+          left: 20,
+          right: 20,
+        ),
+      ),
+    );
+  }
+
+  void _handleUpvote(String docId, Map<String, dynamic> data) async {
+    try {
+      Position pos = await Geolocator.getCurrentPosition();
+      await DatabaseService().upvoteIssue(docId, pos);
+      if (mounted) {
+        Navigator.pop(context);
+        _showTopSnackBar("Issue verified and upvoted!", Colors.greenAccent);
+      }
+    } catch (e) {
+      if (mounted) {
+        _showTopSnackBar(e.toString().replaceAll("Exception: ", ""), Colors.redAccent);
+      }
+    }
+  }
 
   Future<void> _openCamera() async {
     final result = await Navigator.push(
@@ -41,7 +74,6 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
-  // --- MARKER HELPERS ---
   IconData _getCategoryIcon(String category) {
     switch (category.trim()) {
       case 'Electrical': return Icons.electrical_services;
@@ -71,34 +103,43 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  void _showIssueDetails(BuildContext context, Map<String, dynamic> data) {
+  void _showIssueDetails(BuildContext context, String docId, Map<String, dynamic> data) {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
+      isScrollControlled: true, // Required for custom height
       builder: (context) {
         return Container(
-          height: 550, 
           padding: const EdgeInsets.all(25),
           decoration: const BoxDecoration(
             color: Color(0xFF111111), 
             borderRadius: BorderRadius.vertical(top: Radius.circular(40)),
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey[800], borderRadius: BorderRadius.circular(2)))),
-              const SizedBox(height: 20),
-              
-              Text(data['title'] ?? "Unknown Issue", style: GoogleFonts.bebasNeue(fontSize: 28, color: Colors.white)),
-              const SizedBox(height: 10),
-              
-              Expanded(
-                child: Container(
+          child: SafeArea( // FIX: Prevents overlap with Android Nav Bar
+            child: Column(
+              mainAxisSize: MainAxisSize.min, // Shrink to fit content
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey[800], borderRadius: BorderRadius.circular(2)))),
+                const SizedBox(height: 20),
+                
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(child: Text(data['title'] ?? "Issue", style: GoogleFonts.bebasNeue(fontSize: 28, color: Colors.white))),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                      decoration: BoxDecoration(color: Colors.purple.withOpacity(0.2), borderRadius: BorderRadius.circular(10)),
+                      child: Text("${data['upvotes'] ?? 0} UPVOTES", style: const TextStyle(color: Colors.purpleAccent, fontSize: 10, fontWeight: FontWeight.bold)),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 15),
+                
+                Container(
+                  height: 250, // Fixed image height
                   width: double.infinity,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: Colors.white24),
-                  ),
+                  decoration: BoxDecoration(borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.white24)),
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(20),
                     child: data['imageBase64'] != null
@@ -106,28 +147,29 @@ class _HomeScreenState extends State<HomeScreen> {
                         : const Center(child: Icon(Icons.image_not_supported, color: Colors.grey)),
                   ),
                 ),
-              ),
-              
-              const SizedBox(height: 20),
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                    decoration: BoxDecoration(border: Border.all(color: Colors.white24), borderRadius: BorderRadius.circular(10)),
-                    child: Text("SEVERITY: ${data['severity']}", style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                
+                const SizedBox(height: 20),
+                Text(data['description'] ?? "No description.", style: const TextStyle(color: Colors.white70)),
+                const SizedBox(height: 30),
+
+                // UPVOTE BUTTON
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: () => _handleUpvote(docId, data),
+                    icon: const Icon(Icons.thumb_up_alt_outlined, color: Colors.black),
+                    label: const Text("VERIFY & UPVOTE", style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.white,
+                      foregroundColor: Colors.black,
+                      padding: const EdgeInsets.symmetric(vertical: 18),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                    ),
                   ),
-                  const SizedBox(width: 10),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                    decoration: BoxDecoration(border: Border.all(color: Colors.white24), borderRadius: BorderRadius.circular(10), color: Colors.white10),
-                    child: Text(data['category'] ?? "Other", style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              Text(data['description'] ?? "No description provided.", style: const TextStyle(color: Colors.white70)),
-              const SizedBox(height: 20),
-            ],
+                ),
+                const SizedBox(height: 10),
+              ],
+            ),
           ),
         );
       },
@@ -140,7 +182,6 @@ class _HomeScreenState extends State<HomeScreen> {
       extendBodyBehindAppBar: true,
       body: Stack(
         children: [
-          // LAYER 1: MAP
           StreamBuilder<QuerySnapshot>(
             stream: FirebaseFirestore.instance.collection('issues').snapshots(),
             builder: (context, snapshot) {
@@ -156,7 +197,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       point: LatLng(geo.latitude, geo.longitude),
                       width: 50, height: 50,
                       child: GestureDetector(
-                        onTap: () => _showIssueDetails(context, data),
+                        onTap: () => _showIssueDetails(context, doc.id, data),
                         child: _buildPinStatic(data['severity'] ?? 'Low', data['category'] ?? 'Other'),
                       ),
                     ),
@@ -178,59 +219,37 @@ class _HomeScreenState extends State<HomeScreen> {
             },
           ),
 
-          // LAYER 2: PROFILE ICON (NOW DYNAMIC!)
           Positioned(
             top: 50, right: 20,
             child: GestureDetector(
               onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ProfileScreen())),
               child: Container(
                 padding: const EdgeInsets.all(3),
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(color: Colors.white, width: 2),
-                  color: Colors.black,
-                ),
+                decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 2), color: Colors.black),
                 child: StreamBuilder<DocumentSnapshot>(
                   stream: uid != null ? FirebaseFirestore.instance.collection('users').doc(uid).snapshots() : null,
                   builder: (context, snapshot) {
-                    // Check if we have image data
                     if (snapshot.hasData && snapshot.data!.exists) {
                       var data = snapshot.data!.data() as Map<String, dynamic>;
                       if (data['profileImageBase64'] != null) {
-                        return CircleAvatar(
-                          radius: 20,
-                          backgroundColor: Colors.black,
-                          backgroundImage: MemoryImage(base64Decode(data['profileImageBase64'])),
-                        );
+                        return CircleAvatar(radius: 20, backgroundColor: Colors.black, backgroundImage: MemoryImage(base64Decode(data['profileImageBase64'])));
                       }
                     }
-                    // Fallback Icon
-                    return const CircleAvatar(
-                      radius: 20,
-                      backgroundColor: Colors.black,
-                      child: Icon(Icons.person, color: Colors.white),
-                    );
+                    return const CircleAvatar(radius: 20, backgroundColor: Colors.black, child: Icon(Icons.person, color: Colors.white));
                   },
                 ),
               ),
             ),
           ),
 
-          // LAYER 2.5: XP NOTIFICATION
           if (_showXpNotification)
             Positioned(
-              top: 58, 
-              right: 80, 
+              top: 58, right: 80, 
               child: FadeInRight( 
                 duration: const Duration(milliseconds: 500),
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.9),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: Colors.yellowAccent, width: 1.5),
-                    boxShadow: [BoxShadow(color: Colors.yellowAccent.withOpacity(0.3), blurRadius: 10)],
-                  ),
+                  decoration: BoxDecoration(color: Colors.black.withOpacity(0.9), borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.yellowAccent, width: 1.5), boxShadow: [BoxShadow(color: Colors.yellowAccent.withOpacity(0.3), blurRadius: 10)]),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: const [
@@ -243,52 +262,29 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
 
-          // LAYER 3: DOCK
-         // LAYER 3: DOCK
           Align(
             alignment: Alignment.bottomCenter,
             child: Container(
               height: 80,
-              // FIX: Add system padding so it sits ABOVE the Android nav bar
               margin: EdgeInsets.only(
                 bottom: MediaQuery.of(context).viewPadding.bottom + 20, 
-                left: 20, 
-                right: 20
+                left: 20, right: 20
               ),
               padding: const EdgeInsets.symmetric(horizontal: 20),
-              decoration: BoxDecoration(
-                color: Colors.black.withOpacity(0.9),
-                borderRadius: BorderRadius.circular(25),
-                border: Border.all(color: Colors.white24),
-              ),
+              decoration: BoxDecoration(color: Colors.black.withOpacity(0.9), borderRadius: BorderRadius.circular(25), border: Border.all(color: Colors.white24)),
               child: Row(
-                // ... content remains same ...
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  IconButton(icon: const Icon(Icons.history, color: Colors.white70, size: 28), onPressed: () {
-                    Navigator.push(context, MaterialPageRoute(builder: (_) => const HistoryScreen()));
-                  },),
-                  
+                  IconButton(icon: const Icon(Icons.history, color: Colors.white70, size: 28), onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const HistoryScreen()))),
                   Transform.translate(
                     offset: const Offset(0, -20),
                     child: Container(
                       height: 70, width: 70,
-                      decoration: BoxDecoration(
-                        color: Colors.white, 
-                        shape: BoxShape.circle,
-                        border: Border.all(color: Colors.grey[300]!, width: 1),
-                        boxShadow: [BoxShadow(color: Colors.white.withOpacity(0.2), blurRadius: 20, spreadRadius: 2)],
-                      ),
-                      child: IconButton(
-                        icon: const Icon(Icons.camera_alt, color: Colors.black, size: 32), 
-                        onPressed: _openCamera,
-                      ),
+                      decoration: BoxDecoration(color: Colors.white, shape: BoxShape.circle, border: Border.all(color: Colors.grey[300]!, width: 1), boxShadow: [BoxShadow(color: Colors.white.withOpacity(0.2), blurRadius: 20, spreadRadius: 2)]),
+                      child: IconButton(icon: const Icon(Icons.camera_alt, color: Colors.black, size: 32), onPressed: _openCamera),
                     ),
                   ),
-
-                  IconButton(icon: const Icon(Icons.emoji_events_outlined, color: Colors.white70, size: 28), onPressed: () {
-                    Navigator.push(context, MaterialPageRoute(builder: (_) => const LeaderboardScreen()));
-                  },),
+                  IconButton(icon: const Icon(Icons.emoji_events_outlined, color: Colors.white70, size: 28), onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const LeaderboardScreen()))),
                 ],
               ),
             ),
