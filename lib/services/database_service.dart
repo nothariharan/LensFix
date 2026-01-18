@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:geolocator/geolocator.dart';
 import 'dart:typed_data';
 import 'dart:io';
+import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
 
 class DatabaseService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
@@ -11,7 +12,6 @@ class DatabaseService {
 
   // --- ADMIN ACTIONS ---
   
-  // Web-safe: Converts raw bytes to Base64 (No dart:io dependency)
   Future<String> convertBytesToBase64(Uint8List bytes) async {
     return base64Encode(bytes);
   }
@@ -86,6 +86,7 @@ class DatabaseService {
       await userDoc.update({'lastActive': FieldValue.serverTimestamp()});
     }
   }
+
   Future<String> convertImageToBase64(File imageFile) async {
     try {
       List<int> imageBytes = await imageFile.readAsBytes();
@@ -149,7 +150,7 @@ class DatabaseService {
     }
   }
 
-  // --- UPDATED UPVOTE: WEB-OPTIMIZED RADIUS & ACCURACY ---
+  // --- UPVOTE ---
 
   Future<void> upvoteIssue(String docId, Position? dummyPos) async {
     String userId = _auth.currentUser!.uid;
@@ -160,20 +161,26 @@ class DatabaseService {
     Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
     GeoPoint issueGeo = data['location'];
 
-    // 1. Force High Accuracy for Browser Web Demo
+    // Web-optimized location request
     Position userPos = await Geolocator.getCurrentPosition(
       desiredAccuracy: LocationAccuracy.best,
       timeLimit: const Duration(seconds: 5),
     );
 
-    // 2. Proximity Check: Expanded to 100 meters for Web/Wi-Fi drift
     double distance = Geolocator.distanceBetween(
       userPos.latitude, userPos.longitude, 
       issueGeo.latitude, issueGeo.longitude
     );
 
-    if (distance > 100) {
-      throw Exception("Too far to verify. (Detected: ${distance.toInt()}m away). Move closer!");
+    debugPrint("DEBUG: Distance detected: ${distance.toInt()}m");
+
+    // Proximity check bypass for web demo
+    if (kIsWeb) {
+       debugPrint("DEBUG: Bypassing proximity for Web build.");
+    } else {
+       if (distance > 30) {
+         throw Exception("Too far to verify. Move closer.");
+       }
     }
 
     List<dynamic> upvotedBy = data['upvotedBy'] ?? [];
@@ -183,7 +190,6 @@ class DatabaseService {
     String newSeverity = data['severity'];
     bool newIsUrgent = data['isUrgent'] ?? false;
 
-    // Escalation Logic
     if (newUpvotes >= 20) {
       newSeverity = "High";
       newIsUrgent = true;

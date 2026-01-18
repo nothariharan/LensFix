@@ -6,9 +6,9 @@ import 'package:lens_fix/services/database_service.dart';
 import 'package:lens_fix/utils/location_helper.dart'; 
 import 'package:google_fonts/google_fonts.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
 import 'dart:typed_data'; 
-import 'dart:io' as io;  // Fixes "File" error safely
+import 'dart:io' as io;  
 
 class CameraScreen extends StatefulWidget {
   final bool isEscalation; 
@@ -31,6 +31,7 @@ class _CameraScreenState extends State<CameraScreen> {
   @override
   void initState() {
     super.initState();
+    debugPrint("DEBUG: CameraScreen initialized.");
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _pickImage();
     });
@@ -62,27 +63,7 @@ class _CameraScreenState extends State<CameraScreen> {
     }
   }
 
-  Future<void> _analyzeImage() async {
-    if (_selectedXFile == null) return;
-    
-    setState(() { 
-      _isLoading = true; 
-      _statusMessage = "ANALYZING STRUCTURAL INTEGRITY...";
-    });
-
-    try {
-      // Web safe analysis using the XFile path or bytes
-      Map<String, dynamic> result = await GeminiService.analyzeIssue(_selectedXFile!.path);
-      setState(() {
-        _analysisData = result;
-        _isLoading = false;
-      });
-    } catch (e) {
-      setState(() => _isLoading = false);
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("AI Error: $e")));
-    }
-  }
-
+  // --- RESTORED: NOIR FLOOR PICKER ---
   Future<String> _showFloorPicker(String building) async {
     List<String> options = ["Ground Floor"];
     if (building.contains("Acad Block")) {
@@ -158,55 +139,73 @@ class _CameraScreenState extends State<CameraScreen> {
       builder: (context) {
         return AlertDialog(
           backgroundColor: const Color(0xFF1E1E1E),
-          title: const Text("Edit Report Details", style: TextStyle(color: Colors.white)),
+          title: Text("EDIT REPORT", style: GoogleFonts.bebasNeue(color: Colors.white, fontSize: 22)),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               TextField(
                 controller: titleCtrl,
                 style: const TextStyle(color: Colors.white),
-                decoration: const InputDecoration(labelText: "Title", labelStyle: TextStyle(color: Colors.grey), enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white24))),
+                decoration: const InputDecoration(labelText: "Title", labelStyle: TextStyle(color: Colors.grey)),
               ),
-              const SizedBox(height: 10),
               TextField(
                 controller: descCtrl,
                 style: const TextStyle(color: Colors.white),
                 maxLines: 3,
-                decoration: const InputDecoration(labelText: "Description", labelStyle: TextStyle(color: Colors.grey), enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white24))),
+                decoration: const InputDecoration(labelText: "Description", labelStyle: TextStyle(color: Colors.grey)),
               ),
             ],
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel", style: TextStyle(color: Colors.grey))),
-            TextButton(onPressed: () {
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text("CANCEL")),
+            TextButton(
+              onPressed: () {
                 setState(() {
                   _analysisData!['title'] = titleCtrl.text;
                   _analysisData!['description'] = descCtrl.text;
                 });
                 Navigator.pop(context);
-              }, child: const Text("Save", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
+              },
+              child: const Text("SAVE"),
+            ),
           ],
         );
       },
     );
   }
 
+  Future<void> _analyzeImage() async {
+    if (_selectedXFile == null) return;
+    setState(() { _isLoading = true; _statusMessage = "ANALYZING STRUCTURAL INTEGRITY..."; });
+    try {
+      final dynamic input = kIsWeb ? _webImageBytes : _selectedXFile!.path;
+      Map<String, dynamic> result = await GeminiService.analyzeIssue(input);
+      setState(() { _analysisData = result; _isLoading = false; });
+    } catch (e) {
+      setState(() => _isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("AI Error: $e")));
+    }
+  }
+
+  // --- RESTORED: BUILDING DETECTION & FLOOR PICKER LOGIC ---
   Future<void> _submitReport() async {
     if (_selectedXFile == null || _analysisData == null) return;
     setState(() { _isLoading = true; _statusMessage = "ACQUIRING GPS..."; });
-
     try {
       Position position = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
+      
+      // RESTORED: Find Building
+      debugPrint("DEBUG: RAW LATITUDE: ${position.latitude}");
+      debugPrint("DEBUG: RAW LONGITUDE: ${position.longitude}");
       String building = BuildingDetection.getBuildingName(position.latitude, position.longitude);
+      
+      // RESTORED: Ask for Floor
       String floor = "N/A";
-
       if (building != "Campus Grounds") {
         floor = await _showFloorPicker(building);
       }
 
       _statusMessage = "COMPRESSING EVIDENCE..."; setState(() {});
-      
-      // Convert to Base64 using XFile bytes to avoid dart:io File crash
       final bytes = await _selectedXFile!.readAsBytes();
       String imageBase64 = await _dbService.convertBytesToBase64(bytes);
 
@@ -219,10 +218,8 @@ class _CameraScreenState extends State<CameraScreen> {
         floor: floor,
         isEscalation: widget.isEscalation,
       );
-
       if (!mounted) return;
       Navigator.pop(context, true); 
-
     } catch (e) {
       setState(() => _isLoading = false);
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e"), backgroundColor: Colors.redAccent));
@@ -243,9 +240,10 @@ class _CameraScreenState extends State<CameraScreen> {
     return Scaffold(
       backgroundColor: Colors.black, 
       appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        title: Text(widget.isEscalation ? "ESCALATION MODE" : "ISSUE SCANNER", style: GoogleFonts.bebasNeue(letterSpacing: 2, fontSize: 24, color: widget.isEscalation ? Colors.orangeAccent : Colors.white)),
+        backgroundColor: Colors.transparent, 
         centerTitle: true,
+        title: Text(widget.isEscalation ? "ESCALATION MODE" : "ISSUE SCANNER", 
+          style: GoogleFonts.bebasNeue(letterSpacing: 2, fontSize: 24, color: widget.isEscalation ? Colors.orangeAccent : Colors.white)),
         leading: IconButton(icon: const Icon(Icons.close, color: Colors.white), onPressed: () => Navigator.pop(context)),
       ),
       body: Column(
@@ -256,15 +254,15 @@ class _CameraScreenState extends State<CameraScreen> {
               width: double.infinity,
               margin: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                border: Border.all(color: widget.isEscalation ? Colors.orangeAccent : Colors.white, width: 1), 
+                border: Border.all(color: widget.isEscalation ? Colors.orangeAccent : Colors.white24, width: 1),
                 borderRadius: BorderRadius.circular(20),
                 image: _selectedXFile != null 
-  ? (kIsWeb 
-      ? DecorationImage(image: MemoryImage(_webImageBytes!), fit: BoxFit.cover)
-      : DecorationImage(image: FileImage(io.File(_selectedXFile!.path)), fit: BoxFit.cover))
-  : null,
+                  ? (kIsWeb 
+                      ? DecorationImage(image: MemoryImage(_webImageBytes!), fit: BoxFit.cover)
+                      : DecorationImage(image: FileImage(io.File(_selectedXFile!.path)), fit: BoxFit.cover))
+                  : null,
               ),
-              child: _selectedXFile == null ? const Center(child: Text("Launch Camera...", style: TextStyle(color: Colors.white))) : null,
+              child: _selectedXFile == null ? const Center(child: Text("Launch Camera...", style: TextStyle(color: Colors.white54))) : null,
             ),
           ),
           Expanded(
@@ -303,8 +301,13 @@ class _CameraScreenState extends State<CameraScreen> {
                                   alignment: Alignment.centerLeft,
                                   child: Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                    decoration: BoxDecoration(color: _getSeverityColor(_analysisData!['severity']).withOpacity(0.1), border: Border.all(color: _getSeverityColor(_analysisData!['severity'])), borderRadius: BorderRadius.circular(20)),
-                                    child: Text((_analysisData!['severity'] ?? "INFO").toUpperCase(), style: TextStyle(color: _getSeverityColor(_analysisData!['severity']), fontWeight: FontWeight.bold, fontSize: 12)),
+                                    decoration: BoxDecoration(
+                                      color: _getSeverityColor(_analysisData!['severity']).withOpacity(0.1), 
+                                      border: Border.all(color: _getSeverityColor(_analysisData!['severity'])), 
+                                      borderRadius: BorderRadius.circular(20)
+                                    ),
+                                    child: Text((_analysisData!['severity'] ?? "INFO").toUpperCase(), 
+                                      style: TextStyle(color: _getSeverityColor(_analysisData!['severity']), fontWeight: FontWeight.bold, fontSize: 12)),
                                   ),
                                 ),
                                 const SizedBox(height: 15),
@@ -312,6 +315,8 @@ class _CameraScreenState extends State<CameraScreen> {
                                 const SizedBox(height: 5),
                                 Text(_analysisData!['description'] ?? "No description available.", style: const TextStyle(color: Colors.white70, fontSize: 14, height: 1.4)),
                                 const SizedBox(height: 20),
+                                
+                                // --- RESTORED: RECOMMENDED FIX CARD ---
                                 Container(
                                   padding: const EdgeInsets.all(16),
                                   decoration: BoxDecoration(color: Colors.white.withOpacity(0.05), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.white24)),
@@ -341,13 +346,13 @@ class _CameraScreenState extends State<CameraScreen> {
                     if (!_isLoading)
                       Row(
                         children: [
-                          Expanded(child: OutlinedButton(onPressed: _pickImage, style: OutlinedButton.styleFrom(side: const BorderSide(color: Colors.white24), padding: const EdgeInsets.symmetric(vertical: 16), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))), child: const Text("RETAKE", style: TextStyle(color: Colors.white)))),
+                          Expanded(child: OutlinedButton(onPressed: _pickImage, style: OutlinedButton.styleFrom(side: const BorderSide(color: Colors.white24), padding: const EdgeInsets.symmetric(vertical: 16), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))), child: Text("RETAKE", style: GoogleFonts.bebasNeue(color: Colors.white, letterSpacing: 1)))),
                           const SizedBox(width: 16),
                           Expanded(flex: 2, child: ElevatedButton.icon(
                             onPressed: _analysisData == null ? _analyzeImage : _submitReport,
                             style: ElevatedButton.styleFrom(backgroundColor: widget.isEscalation ? Colors.orangeAccent : Colors.white, foregroundColor: Colors.black, padding: const EdgeInsets.symmetric(vertical: 16), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
                             icon: Icon(_analysisData == null ? Icons.analytics : Icons.cloud_upload, color: Colors.black),
-                            label: Text(_analysisData == null ? "ANALYZE ISSUE" : (widget.isEscalation ? "ESCALATE REPORT" : "SUBMIT REPORT"), style: const TextStyle(fontWeight: FontWeight.bold)),
+                            label: Text(_analysisData == null ? "ANALYZE ISSUE" : "SUBMIT REPORT", style: GoogleFonts.bebasNeue(fontSize: 18, letterSpacing: 1)),
                           )),
                         ],
                       ),

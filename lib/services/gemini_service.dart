@@ -1,22 +1,34 @@
 import 'dart:convert';
-import 'dart:io';
+import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
 import 'package:google_generative_ai/google_generative_ai.dart';
 import 'package:lens_fix/utils/api_constants.dart';
+import 'dart:typed_data';
+import 'dart:io' as io; // Safe import for mobile only checks
 
 class GeminiService {
-  static Future<Map<String, dynamic>> analyzeIssue(String imagePath) async {
+  /// analyzeIssue now accepts dynamic 'input'. 
+  /// Pass String path for mobile, Uint8List for web.
+  static Future<Map<String, dynamic>> analyzeIssue(dynamic input) async {
     try {
       final model = GenerativeModel(
         model: 'gemini-flash-latest', 
         apiKey: ApiConstants.geminiApiKey,
       );
 
-      final imageFile = File(imagePath);
-      if (!await imageFile.exists()) {
-        return {'error': "Image file not found."};
+      Uint8List imageBytes;
+
+      // WEB SAFE LOGIC: Avoid using 'io.File' on Web
+      if (kIsWeb) {
+        debugPrint("DEBUG: GeminiService processing bytes for Web");
+        imageBytes = input as Uint8List;
+      } else {
+        debugPrint("DEBUG: GeminiService processing file path for Mobile");
+        final imageFile = io.File(input as String);
+        if (!await imageFile.exists()) {
+          return {'error': "Image file not found."};
+        }
+        imageBytes = await imageFile.readAsBytes();
       }
-      
-      final imageBytes = await imageFile.readAsBytes();
       
       final content = [
         Content.multi([
@@ -41,15 +53,14 @@ class GeminiService {
       if (responseText == null) return {'error': "AI returned no text."};
 
       String cleanJson = responseText.replaceAll('```json', '').replaceAll('```', '').trim();
-
       return jsonDecode(cleanJson);
 
     } catch (e) {
-      print("❌ GEMINI ERROR: $e");
+      debugPrint("❌ GEMINI ERROR: $e");
       return {
         'title': 'Error',
         'severity': 'Unknown',
-        'category': 'Other', // Fallback
+        'category': 'Other',
         'description': 'Could not analyze image due to a connection error.',
         'fix': 'Please try again.',
         'error': e.toString()

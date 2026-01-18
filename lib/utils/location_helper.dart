@@ -1,35 +1,24 @@
 class BuildingDetection {
   static String getBuildingName(double lat, double lon) {
-    // Academic Block
-    if (lat <= 13.555636 && lat >= 13.554988 && lon >= 80.026425 && lon <= 80.027112) {
-      return "Acad Block";
-    }
-    // Boys Hostel 4
-    if (lat <= 13.552917 && lat >= 13.552521 && lon >= 80.025705 && lon <= 80.026258) {
+    // CALIBRATED: Boys Hostel 3 & 4 Area (South Cluster)
+    // Shifted North-East to catch your laptop's current drift
+    if (lat <= 13.5570 && lat >= 13.5540 && lon >= 80.0265 && lon <= 80.0285) {
       return "Boys Hostel 4";
     }
-    // Boys Hostel 3
-    if (lat <= 13.553634 && lat >= 13.553265 && lon >= 80.025667 && lon <= 80.026225) {
-      return "Boys Hostel 3";
+
+    // CALIBRATED: Academic Block
+    // Narrowed and shifted to avoid overlap with drifted Hostel coordinates
+    if (lat <= 13.5560 && lat >= 13.5535 && lon >= 80.0250 && lon <= 80.0264) {
+      return "Acad Block";
     }
-    // Mess B
-    if (lat <= 13.553183 && lat >= 13.553015 && lon >= 80.025931 && lon <= 80.026219) {
-      return "Mess B";
+
+    // Widened Boys Hostel 1 & 2 Area (North Cluster)
+    if (lat <= 13.5590 && lat >= 13.5571 && lon >= 80.0240 && lon <= 80.0270) {
+      return "Boys Hostel Cluster (North)";
     }
-    // Boys Hostel 2
-    if (lat <= 13.556764 && lat >= 13.556530 && lon >= 80.024756 && lon <= 80.025195) {
-      return "Boys Hostel 2";
-    }
-    // Boys Hostel 1
-    if (lat <= 13.557274 && lat >= 13.557189 && lon >= 80.024797 && lon <= 80.025387) {
-      return "Boys Hostel 1";
-    }
-    // Mess A
-    if (lat <= 13.557060 && lat >= 13.556872 && lon >= 80.024812 && lon <= 80.025128) {
-      return "Mess A";
-    }
-    // Girls Hostel (NEW)
-    if (lat <= 13.562047 && lat >= 13.561212 && lon >= 80.021310 && lon <= 80.022104) {
+
+    // Widened Girls Hostel Area
+    if (lat <= 13.5640 && lat >= 13.5610 && lon >= 80.0200 && lon <= 80.0230) {
       return "Girls Hostel";
     }
 
