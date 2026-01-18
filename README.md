@@ -1,3 +1,6 @@
-# lens_fix - app 
+# for testing use: 
+student: email: hari@iiits.in
+         pass: pass123
 
-work in progress
+helper: email: helper@iiits.in
+        pass: pass123
