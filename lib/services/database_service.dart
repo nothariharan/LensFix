@@ -1,8 +1,9 @@
-import 'dart:convert'; 
-import 'dart:io';
+import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:geolocator/geolocator.dart';
+import 'dart:typed_data';
+import 'dart:io';
 
 class DatabaseService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
@@ -10,6 +11,11 @@ class DatabaseService {
 
   // --- ADMIN ACTIONS ---
   
+  // Web-safe: Converts raw bytes to Base64 (No dart:io dependency)
+  Future<String> convertBytesToBase64(Uint8List bytes) async {
+    return base64Encode(bytes);
+  }
+
   Future<void> toggleUrgentStatus(String docId, bool currentStatus) async {
     await _db.collection('issues').doc(docId).update({
       'isUrgent': !currentStatus,
@@ -29,30 +35,17 @@ class DatabaseService {
   Future<void> resolveIssue(String docId) async {
     String userId = _auth.currentUser!.uid;
     
-    // 1. Update the issue status
     await _db.collection('issues').doc(docId).update({
       'status': 'Resolved',
       'resolvedBy': userId,
       'resolvedAt': FieldValue.serverTimestamp(),
     });
 
-    // 2. Update the Helper's persistent stats
     await _db.collection('users').doc(userId).update({
       'xp': FieldValue.increment(100),
       'reports': FieldValue.increment(1), 
-      'fixedCount': FieldValue.increment(1), // NEW: Persistent counter
+      'fixedCount': FieldValue.increment(1),
     });
-  }
-
-  // --- UTILITIES ---
-
-  Future<String> convertImageToBase64(File imageFile) async {
-    try {
-      List<int> imageBytes = await imageFile.readAsBytes();
-      return base64Encode(imageBytes);
-    } catch (e) {
-      throw Exception("Image Conversion Failed: $e");
-    }
   }
 
   // --- USER SYNC & MIGRATION ---
@@ -93,6 +86,14 @@ class DatabaseService {
       await userDoc.update({'lastActive': FieldValue.serverTimestamp()});
     }
   }
+  Future<String> convertImageToBase64(File imageFile) async {
+    try {
+      List<int> imageBytes = await imageFile.readAsBytes();
+      return base64Encode(imageBytes);
+    } catch (e) {
+      throw Exception("Image Conversion Failed: $e");
+    }
+  }
 
   Future<void> updateUserProfile({String? name, String? imageBase64}) async {
     String userId = _auth.currentUser!.uid;
@@ -104,9 +105,6 @@ class DatabaseService {
 
   // --- REPORTING ---
 
-  // --- UPDATED REPORTING WITH BUILDING & FLOOR ---
-
-  // --- DATABASE SERVICE UPDATE ---
   Future<void> reportIssue({
     required Map<String, dynamic> aiData, 
     required String imageBase64, 
@@ -139,11 +137,10 @@ class DatabaseService {
         'upvotedBy': [],
       });
 
-      // --- FIXED LOGIC: Increments 'reports' for students ---
       await _db.collection('users').doc(userId).set({
         'email': userEmail,
         'xp': FieldValue.increment(50),      
-        'reports': FieldValue.increment(1), // <--- ADD THIS LINE
+        'reports': FieldValue.increment(1),
         'lastActive': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
 
@@ -152,9 +149,9 @@ class DatabaseService {
     }
   }
 
-  // --- NEW: UPVOTE & DYNAMIC ESCALATION ---
+  // --- UPDATED UPVOTE: WEB-OPTIMIZED RADIUS & ACCURACY ---
 
-  Future<void> upvoteIssue(String docId, Position userPos) async {
+  Future<void> upvoteIssue(String docId, Position? dummyPos) async {
     String userId = _auth.currentUser!.uid;
     DocumentReference issueRef = _db.collection('issues').doc(docId);
     DocumentSnapshot doc = await issueRef.get();
@@ -163,13 +160,21 @@ class DatabaseService {
     Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
     GeoPoint issueGeo = data['location'];
 
-    // Proximity Check (20 meters)
+    // 1. Force High Accuracy for Browser Web Demo
+    Position userPos = await Geolocator.getCurrentPosition(
+      desiredAccuracy: LocationAccuracy.best,
+      timeLimit: const Duration(seconds: 5),
+    );
+
+    // 2. Proximity Check: Expanded to 100 meters for Web/Wi-Fi drift
     double distance = Geolocator.distanceBetween(
       userPos.latitude, userPos.longitude, 
       issueGeo.latitude, issueGeo.longitude
     );
 
-    if (distance > 20) throw Exception("Too far away to verify. Move closer.");
+    if (distance > 100) {
+      throw Exception("Too far to verify. (Detected: ${distance.toInt()}m away). Move closer!");
+    }
 
     List<dynamic> upvotedBy = data['upvotedBy'] ?? [];
     if (upvotedBy.contains(userId)) throw Exception("Already verified.");

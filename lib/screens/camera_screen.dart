@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:animate_do/animate_do.dart';
@@ -7,6 +6,9 @@ import 'package:lens_fix/services/database_service.dart';
 import 'package:lens_fix/utils/location_helper.dart'; 
 import 'package:google_fonts/google_fonts.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'dart:typed_data'; 
+import 'dart:io' as io;  // Fixes "File" error safely
 
 class CameraScreen extends StatefulWidget {
   final bool isEscalation; 
@@ -17,7 +19,8 @@ class CameraScreen extends StatefulWidget {
 }
 
 class _CameraScreenState extends State<CameraScreen> {
-  File? _selectedImage;
+  XFile? _selectedXFile; 
+  Uint8List? _webImageBytes;
   Map<String, dynamic>? _analysisData;
   bool _isLoading = false;
   String _statusMessage = "";
@@ -36,14 +39,23 @@ class _CameraScreenState extends State<CameraScreen> {
   Future<void> _pickImage() async {
     final XFile? photo = await _picker.pickImage(
       source: ImageSource.camera,
-      imageQuality: 30, 
+      imageQuality: 30,
     );
     
     if (photo != null) {
-      setState(() {
-        _selectedImage = File(photo.path);
-        _analysisData = null; 
-      });
+      if (kIsWeb) {
+        final bytes = await photo.readAsBytes();
+        setState(() {
+          _selectedXFile = photo;
+          _webImageBytes = bytes;
+          _analysisData = null;
+        });
+      } else {
+        setState(() {
+          _selectedXFile = photo;
+          _analysisData = null; 
+        });
+      }
     } else {
       if (!mounted) return;
       Navigator.pop(context);
@@ -51,7 +63,7 @@ class _CameraScreenState extends State<CameraScreen> {
   }
 
   Future<void> _analyzeImage() async {
-    if (_selectedImage == null) return;
+    if (_selectedXFile == null) return;
     
     setState(() { 
       _isLoading = true; 
@@ -59,7 +71,8 @@ class _CameraScreenState extends State<CameraScreen> {
     });
 
     try {
-      Map<String, dynamic> result = await GeminiService.analyzeIssue(_selectedImage!.path);
+      // Web safe analysis using the XFile path or bytes
+      Map<String, dynamic> result = await GeminiService.analyzeIssue(_selectedXFile!.path);
       setState(() {
         _analysisData = result;
         _isLoading = false;
@@ -70,10 +83,8 @@ class _CameraScreenState extends State<CameraScreen> {
     }
   }
 
-  // --- UPDATED NOIR FLOOR PICKER WITH DYNAMIC LOGIC ---
   Future<String> _showFloorPicker(String building) async {
     List<String> options = ["Ground Floor"];
-
     if (building.contains("Acad Block")) {
       options = ["Basement", "Ground Floor", "1st Floor", "2nd Floor"];
     } else if (building.contains("Boys Hostel")) {
@@ -85,7 +96,6 @@ class _CameraScreenState extends State<CameraScreen> {
     }
 
     String selected = options[0];
-
     await showDialog(
       context: context,
       barrierDismissible: false,
@@ -182,7 +192,7 @@ class _CameraScreenState extends State<CameraScreen> {
   }
 
   Future<void> _submitReport() async {
-    if (_selectedImage == null || _analysisData == null) return;
+    if (_selectedXFile == null || _analysisData == null) return;
     setState(() { _isLoading = true; _statusMessage = "ACQUIRING GPS..."; });
 
     try {
@@ -195,7 +205,10 @@ class _CameraScreenState extends State<CameraScreen> {
       }
 
       _statusMessage = "COMPRESSING EVIDENCE..."; setState(() {});
-      String imageBase64 = await _dbService.convertImageToBase64(_selectedImage!);
+      
+      // Convert to Base64 using XFile bytes to avoid dart:io File crash
+      final bytes = await _selectedXFile!.readAsBytes();
+      String imageBase64 = await _dbService.convertBytesToBase64(bytes);
 
       _statusMessage = "FINALIZING REPORT..."; setState(() {});
       await _dbService.reportIssue(
@@ -245,9 +258,13 @@ class _CameraScreenState extends State<CameraScreen> {
               decoration: BoxDecoration(
                 border: Border.all(color: widget.isEscalation ? Colors.orangeAccent : Colors.white, width: 1), 
                 borderRadius: BorderRadius.circular(20),
-                image: _selectedImage != null ? DecorationImage(image: FileImage(_selectedImage!), fit: BoxFit.cover) : null,
+                image: _selectedXFile != null 
+  ? (kIsWeb 
+      ? DecorationImage(image: MemoryImage(_webImageBytes!), fit: BoxFit.cover)
+      : DecorationImage(image: FileImage(io.File(_selectedXFile!.path)), fit: BoxFit.cover))
+  : null,
               ),
-              child: _selectedImage == null ? const Center(child: Text("Launch Camera...", style: TextStyle(color: Colors.white))) : null,
+              child: _selectedXFile == null ? const Center(child: Text("Launch Camera...", style: TextStyle(color: Colors.white))) : null,
             ),
           ),
           Expanded(
